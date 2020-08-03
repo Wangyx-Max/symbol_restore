@@ -1,32 +1,19 @@
-from sql_opt import SqlOperate
-
-bin_name = "C:\\Users\\Admin\\Desktop\\data_clean_code\\libcpp_tests_noSymbol.sqlite"
-sql_opt = SqlOperate(bin_name)
-src_name = "C:\\Users\\Admin\\Desktop\\data_clean_code\\diff.sqlite"
-conn, cur = sql_opt.attach(src_name)
-sql = "select bin_address, src_address, description from results"
-sql_bin = "select clean_assembly from functions where address = %s"
-sql_src = "select clean_assembly from diff.functions where address = %s"
-cur.execute(sql)
-rows = cur.fetchall()
-sql = """
-create table if not exists tmp (
-            bin_address text, 
-            bin_clean_assembly text,
-            src_address text unique,
-            src_clean_assembly text,
-            description varchar(255))
-"""
-cur.execute(sql)
-sql_insert = """
-insert or ignore into tmp (bin_address, bin_clean_assembly, src_address, src_clean_assembly, description)
-values(?, ?, ?, ?, ?)
-"""
+# from idc import *
+from perfect_match import PerfectMatch
+from sql_opt import *
+import time
+t0 = time.time()
+# sqlite_db = os.path.splitext(GetIdbPath())[0] + ".sqlite"
+sqlite_db = "libcpp_tests_noSymbol.sqlite"
+sym_db = "diff.sqlite"
+sql_op = SqlOperate(sqlite_db)
+rows = sql_op.read_results()
+pm = PerfectMatch(sqlite_db, sym_db)
 for row in rows:
-    cur.execute(sql_bin % str(row[0]))
-    bin = cur.fetchone()
-    cur.execute(sql_src % str(row[1]))
-    src = cur.fetchone()
-    l = [str(row[0]), str(bin[0]), str(row[1]), str(src[0]), str(row[2])]
-    cur.execute(sql_insert, l)
-    conn.commit()
+    if int(row[0]) in pm.functions:
+        pm.functions.remove(int(row[0]))
+
+pm.caller_match_3()
+time_elapsed = time.time() - t0
+print('Total time in {:.0f}m {:.0f}s'.format(
+    time_elapsed // 60, time_elapsed % 60))

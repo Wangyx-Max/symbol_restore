@@ -6,6 +6,7 @@ bytes hash match
 update functions table with mnemonics and constants
 mnemonics match
 """
+
 from idautils import *
 from idc import *
 from idaapi import *
@@ -36,7 +37,7 @@ class PerfectMatch:
             return False
 
         func = get_func(f)
-        if not func:
+        if func is None:
             print("Cannot get a function object for 0x%x" % f)
             return False
         return True
@@ -109,10 +110,14 @@ class PerfectMatch:
 
         callers = []
         crefs = list(CodeRefsTo(f, 0))
+        if len(crefs) == 0:
+            l = (callers, 0, f)
+            return l
+
         if SegName(crefs[0]) == '.plt':
             crefs = list(CodeRefsTo(get_func(crefs[0]).startEA, 0))
         for cref in crefs:
-            if SegName(cref) == '.text':
+            if SegName(cref) == '.text' and get_func(cref) is not None:
                 callers.append(str(cref))
         l = (callers, len(callers), f)
         return l
@@ -206,24 +211,28 @@ class PerfectMatch:
         """
         @param l: callers, callers_count, f
         """
-        props = self.create_sql_props(l)
         (callers, callers_count, f) = l
+        sql = """select id from functions where address = %s
+        """
+        sql_insert = """insert or ignore into callers (caller_id, caller_address, call_address, callee_address)
+        values (?, ?, ?, ?)
+        """
+        new_callers = []
+        for caller in callers:
+            caller_func = get_func(int(caller)).startEA
+            self.cur.execute(sql % str(caller_func))
+            caller_id = self.cur.fetchone()
+            if caller_id is None:
+                continue
+            self.cur.execute(sql_insert, (str(caller_id[0]), str(caller_func), str(caller), str(f)))
+            self.conn.commit()
+            new_callers.append(caller)
+        props = self.create_sql_props((new_callers, len(new_callers), f))
         sql = """update or ignore functions set callers = ?, callers_count = ?
                 where address = ?
         """
         self.cur.execute(sql, props)
         self.conn.commit()
-        sql = """select id from functions where address = %s
-        """
-        sql_insert = """insert or ignore into callers (caller_id, caller_address, callee_address)
-        value (?, ?, ?)
-        """
-        for caller in callers:
-            caller_func = get_func(caller).startEA
-            self.cur.execute(sql % str(caller_func))
-            caller_id = self.cur.fetchone()[0]
-            self.cur.execute(sql_insert, (str(caller_id), str(caller), str(f)))
-            self.conn.commit()
 
     def save_functions(self):
         t0 = time.time()
@@ -259,8 +268,8 @@ class PerfectMatch:
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_callers()
-        self.conn = self.cur = sql_op.connect()
-        for func in self.functions:
+        self.conn, self.cur = sql_op.connect()
+        for func in list(Functions(self.min_ea, self.max_ea)):
             l = self.read_callers(func)
             if l is False:
                 continue
@@ -448,7 +457,7 @@ class PerfectMatch:
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results()
         self.conn, self.cur = sql_op.attach(self.src_name)
-        rules_name = ['Rare Md_Index Match', 'Rare KOKA Hash Match', 'Md_Index Constants Match', 'KOKA Hash Constants Match']
+        rules_name = ['Rare Md_Index Match', 'Rare KOKA Hash Match', 'Md_Index Constants Match']
         for rules in rules_name:
             t0 = time.time()
             sql = sql_dict[rules]
@@ -459,27 +468,119 @@ class PerfectMatch:
         if self.cur is not None:
             self.cur.close()
 
-    def caller_match(self):
+    def caller_test_match(self):
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results()
         self.conn, self.cur = sql_op.attach(self.src_name)
         sql = sql_dict['neighbor_match']
-        sql_bin = """select id from functions where bin_address = %s
+        sql_callers = """select * from callers where caller_id = %s order by caller_address
         """
-        sql_callers = """select * from callers where caller_id = %s
+        sql_results = """select * from results where bin_address = %s and src_address = %s
         """
         self.cur.execute(sql)
         rows = self.cur.fetchall()
+        sum = 0
         for row in rows:
-            self.cur.execute(sql_bin % str(row[0]))
-            caller_id = self.cur.fetchone()[0]
-            self.cur.execute(sql_callers % str(caller_id))
+            self.cur.execute(sql_callers % str(row[6]))
             callers = self.cur.fetchall()
+            if len(callers) == 0:
+                continue
             callers_bin = []
             for caller in callers:
-                callers_bin.append(caller)
+                callers_bin.append(caller[2])
+            self.cur.execute(sql_callers % str(row[2]))
+            callers = self.cur.fetchall()
+            if len(callers) == 0:
+                continue
+            callers_src = []
+            for caller in callers:
+                callers_src.append(caller[2])
+            if len(callers_bin) != len(callers_src):
+                continue
+            print str(row[1]) + json.dumps(callers_bin)
+            print str(row[3]) + json.dumps(callers_src)
+            flag = False
+            for i in range(0, len(callers_bin)):
+                self.cur.execute(sql_results % (callers_bin[i], callers_src[i]))
+                res = self.cur.fetchone()
+                if res is not None:
+                    flag = True
+                    break
+            if flag:
+                print row[4] + '->' + row[0]
+                sum += 1
+        if self.cur is not None:
+            self.cur.close()
+        time_elapsed = time.time() - t0
+        print('Call Match:' + str(sum))
+        print('Call Match {:.0f}m {:.0f}s'.format(
+            time_elapsed // 60, time_elapsed % 60))
 
+    def do_caller_match(self):
+        sql_op = SqlOperate(self.bin_name)
+        sql_op.create_results()
+        rows = sql_op.read_results()
+        if len(rows) == 0:
+            return
+        self.conn, self.cur = sql_op.attach(self.src_name)
+        sql_bin = """select * from callers where caller_address = %s order by call_address
+        """
+        sql_src = """select * from diff.callers where caller_address = %s order by call_address
+        """
+        sql_func_bin = """select name, size from functions where address = %s
+        """
+        sql_func_src = """select name, size from diff.functions where address = %s
+        """
+        sum = 0
+        for row in rows:
+            self.cur.execute(sql_bin % row[0])
+            callers = self.cur.fetchall()
+            if len(callers) == 0:
+                continue
+            callers_bin = []
+            for caller in callers:
+                callers_bin.append(caller[3])
+            self.cur.execute(sql_src % row[2])
+            callers = self.cur.fetchall()
+            if len(callers) == 0:
+                continue
+            callers_src = []
+            for caller in callers:
+                callers_src.append(caller[3])
+            if len(callers_bin) != len(callers_src):
+                continue
+            # print str(row[1]) + json.dumps(callers_bin)
+            # print str(row[3]) + json.dumps(callers_src)
+            for i in range(0, len(callers_bin)):
+                if int(callers_bin[i]) not in self.functions:
+                    continue
+                self.cur.execute(sql_func_bin % callers_bin[i])
+                bin = self.cur.fetchone()
+                self.cur.execute(sql_func_src % callers_src[i])
+                src = self.cur.fetchone()
+                if src and bin:
+                    if src[1] == bin[1]:
+                        l = (callers_bin[i], bin[0], callers_src[i], src[0], 'Call Match')
+                        self.do_insert_results(l)
+                        if int(callers_bin[i]) in self.functions:
+                            self.functions.remove(int(callers_bin[i]))
+                        sum += 1
+        return sum
+
+    def caller_match(self):
+        t0 = time.time()
+        sum = 0
+        s = self.do_caller_match()
+        while s:
+            sum += s
+            print s
+            s = self.do_caller_match()
+
+        time_elapsed = time.time() - t0
+        print('Call Match:' + str(sum))
+        print('Call Match {:.0f}m {:.0f}s'.format(
+            time_elapsed // 60, time_elapsed % 60))
 
     def neighbor_match(self):
         t0 = time.time()
@@ -546,22 +647,21 @@ class PerfectMatch:
             time_elapsed // 60, time_elapsed % 60))
 
     def do_perfect_match(self):
-        self.save_functions()
+        # self.save_functions()
         self.strings_match()
         self.bytes_hash_match()
-        self.save_constants()
+        # self.save_constants()
         self.constants_match()
-        self.update_cfg_hash()
+        # self.update_cfg_hash()
         self.cfg_hash_match()
         self.neighbor_match()
+        # self.save_callers()
+        self.caller_match()
         self.neighbor_match()
-        self.save_callers()
-
-
-    def do_test_string_match(self):
-        self.strings_match()
 
     def analyse_symbol(self):
         self.save_functions()
         self.save_constants()
         self.update_cfg_hash()
+        self.save_callers()
+
