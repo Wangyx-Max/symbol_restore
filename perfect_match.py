@@ -1,12 +1,3 @@
-"""
-create functions table and store name and address
-string match, same name match
-update functions table with bytes hash
-bytes hash match
-update functions table with mnemonics and constants
-mnemonics match
-"""
-
 from idautils import *
 from idc import *
 from idaapi import *
@@ -50,6 +41,7 @@ class PerfectMatch:
         instructions = 0
         function_hash = []
         mnems = []
+        nums = []
 
         flags = GetFunctionFlags(int(f))
         func = get_func(f)
@@ -69,10 +61,13 @@ class PerfectMatch:
             instructions += 1
             function_hash.append(GetManyBytes(line, ItemSize(line), False))
 
+            if mnem != '' and GetOpType(line, 2) == o_imm:
+                nums.append(GetOperandValue(line, 2))
+
         function_hash = md5("".join(function_hash)).hexdigest()
 
         l = (name, true_name, f, flags, size, instructions,
-             function_hash, mnems)
+             function_hash, mnems, nums, len(nums))
         return l
 
     def read_cfg_hash(self, f):
@@ -100,6 +95,7 @@ class PerfectMatch:
                         if str_constant is not None:
                             if str_constant not in constants:
                                 constants.append(str_constant)
+                                print hex(x), str_constant
 
         l = (constants, len(constants), f)
         return l
@@ -162,12 +158,13 @@ class PerfectMatch:
 
     def do_insert_function(self, l):
         """
-        @ param l : name, true_name,f, flags, size, instructions, function_hash, mnems
+        @ param l : name, true_name,f, flags, size, instructions, function_hash, mnems, nums, nums_count
         """
         props = self.create_sql_props(l)
         sql = """insert or ignore into functions (name, mangled_function, address, function_flags, size, instructions,
-                    function_hash, mnemonics)
-            values (?, ?, ?, ?, ?, ?, ?, ?)
+                    function_hash, mnemonics, numbers, numbers_count)
+            values (?, ?, ?, ?, ?, ?, 
+                    ?, ?, ?, ?)
         """
         self.cur.execute(sql, props)
         self.conn.commit()
@@ -203,7 +200,7 @@ class PerfectMatch:
         func_id = func_id[0]
         sql = "insert or ignore into constants (func_id, constant) values (?, ?)"
         for constant in constants:
-            if type(constant) is str and len(constant) > 10:
+            if type(constant) is str and len(constant) > 5:
                 self.cur.execute(sql, (func_id, constant))
                 self.conn.commit()
 
@@ -353,19 +350,20 @@ class PerfectMatch:
             time_elapsed // 60, time_elapsed % 60))
 
     def bytes_hash_match(self):
+        t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results()
         self.conn, self.cur = sql_op.attach(self.src_name)
-        rules_name = ['Same Name Match', 'Bytes Hash Match', 'Rare Mnemonics Match']
+        sum = 0
+        rules_name = ['Same Name Match', 'Rare Bytes Hash Match', 'Rare Mnemonics Match']
         for rules in rules_name:
-            t0 = time.time()
             sql = sql_dict[rules]
-            sum = self.insert_results(sql)
-            time_elapsed = time.time() - t0
-            print(rules + ':' +str(sum))
-            print(rules + " {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+            sum += self.insert_results(sql)
         if self.cur is not None:
             self.cur.close()
+        time_elapsed = time.time() - t0
+        print('Bytes Hash Match:' + str(sum))
+        print("Bytes Hash Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
 
     def update_cfg_hash(self):
         t0 = time.time()
@@ -383,90 +381,67 @@ class PerfectMatch:
             time_elapsed // 60, time_elapsed % 60))
 
     def do_constants_match(self):
-        sql = """select distinct func_id from constants 
-                        group by func_id having count(func_id) > 1
-                """
-        self.cur.execute(sql)
-        bin_rows = self.cur.fetchall()
-        bin_dict = {}
-        sql = """select constant from constants where func_id = %s"""
-        for bin_row in bin_rows:
-            self.cur.execute(sql % str(bin_row[0]))
-            constants = self.cur.fetchall()
-            for constant in constants:
-                try:
-                    bin_dict[str(bin_row[0])].append(str(constant))
-                except:
-                    bin_dict[str(bin_row[0])] = []
-                    bin_dict[str(bin_row[0])].append(str(constant))
-        # print bin_dict
-        sql = """select distinct func_id from diff.constants 
-                        group by func_id having count(func_id) > 1
-                """
-        self.cur.execute(sql)
-        src_rows = self.cur.fetchall()
-        src_dict = {}
-        sql = """select constant from diff.constants where func_id = %s"""
-        for src_row in src_rows:
-            self.cur.execute(sql % str(src_row[0]))
-            constants = self.cur.fetchall()
-            for constant in constants:
-                try:
-                    src_dict[str(src_row[0])].append(str(constant))
-                except:
-                    src_dict[str(src_row[0])] = []
-                    src_dict[str(src_row[0])].append(str(constant))
-        # print src_dict
+        sql_opt = SqlOperate(self.bin_name)
+        bin_dict = sql_opt.read_constants()
+        src_dict = sql_opt.read_constants(self.src_name)
+        self.conn, self.cur = sql_opt.attach(self.src_name)
         sum = 0
-        for func_id, constants in bin_dict.items():
-            if constants in src_dict.values():
-                src_func_id = src_dict.keys()[src_dict.values().index(constants)]
-                sql = "select address, name from functions where id = %d"
+        for constants, funcs_id in bin_dict.items():
+            if len(funcs_id) == 1 and constants in src_dict.keys():
+                src_funcs_id = src_dict[constants]
+                if len(src_funcs_id) != 1:
+                    continue
+                func_id = funcs_id[0]
+                src_func_id = src_funcs_id[0]
+                sql = "select address, name, size from functions where id = %d"
                 self.cur.execute(sql % int(func_id))
                 bin_res = self.cur.fetchone()
-                sql = "select address, name from diff.functions where id = %d"
+                sql = "select address, name, size from diff.functions where id = %d"
                 self.cur.execute(sql % int(src_func_id))
                 src_res = self.cur.fetchone()
-                l = (str(bin_res[0]), str(bin_res[1]), str(src_res[0]), str(src_res[1]), 'Constants Match')
+                if bin_res[2] != src_res[2]:
+                    continue
+                l = (str(bin_res[0]), str(bin_res[1]), str(src_res[0]), str(src_res[1]), 'Long Constants Match')
                 self.do_insert_results(l)
                 sum += 1
+        if self.cur is not None:
+            self.cur.close()
         return sum
 
     def constants_match(self):
         t0 = time.time()
+        sum = 0
+        sum += self.do_constants_match()
+
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results()
         self.conn, self.cur = sql_op.attach(self.src_name)
-        sum = self.do_constants_match()
-        time_elapsed = time.time() - t0
-        print('Constants Match:' + str(sum))
-        print('Constants Match {:.0f}m {:.0f}s'.format(
-            time_elapsed // 60, time_elapsed % 60))
         rules_name = ['Rare Constants Match', 'Mnemonics Constants match']
         for rules in rules_name:
-            t0 = time.time()
             sql = sql_dict[rules]
-            sum = self.insert_results(sql)
-            time_elapsed = time.time() - t0
-            print(rules + ":" +str(sum))
-            print(rules + " {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+            sum += self.insert_results(sql)
         if self.cur is not None:
             self.cur.close()
+        time_elapsed = time.time() - t0
+        print('Constants Match :' + str(sum))
+        print('Constants Match {:.0f}m {:.0f}s'.format(
+            time_elapsed // 60, time_elapsed % 60))
 
     def cfg_hash_match(self):
+        t0 = time.time()
+        sum = 0
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results()
         self.conn, self.cur = sql_op.attach(self.src_name)
-        rules_name = ['Rare Md_Index Match', 'Rare KOKA Hash Match', 'Md_Index Constants Match']
+        rules_name = ['Rare Md_Index Match', 'Rare KOKA Hash Match', 'Md_Index Constants Match', 'Rare KOKA Hash Match']
         for rules in rules_name:
-            t0 = time.time()
             sql = sql_dict[rules]
-            sum = self.insert_results(sql)
-            time_elapsed = time.time() - t0
-            print(rules + ":" +str(sum))
-            print(rules + " {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+            sum += self.insert_results(sql)
         if self.cur is not None:
             self.cur.close()
+        time_elapsed = time.time() - t0
+        print("CFG Hash Match :" + str(sum))
+        print("CFG Hash Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
 
     def caller_test_match(self):
         t0 = time.time()
@@ -566,6 +541,8 @@ class PerfectMatch:
                         if int(callers_bin[i]) in self.functions:
                             self.functions.remove(int(callers_bin[i]))
                         sum += 1
+        if self.cur is not None:
+            self.cur.close()
         return sum
 
     def caller_match(self):
@@ -574,7 +551,7 @@ class PerfectMatch:
         s = self.do_caller_match()
         while s:
             sum += s
-            print s
+            # print s
             s = self.do_caller_match()
 
         time_elapsed = time.time() - t0
@@ -582,36 +559,23 @@ class PerfectMatch:
         print('Call Match {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
 
-    def neighbor_match(self):
-        t0 = time.time()
-        sql_op = SqlOperate(self.bin_name)
-        sql_op.create_results()
-        self.conn, self.cur = sql_op.attach(self.src_name)
-        sql = sql_dict['neighbor_match']
+    def do_neighbor_match(self, pairs, rule):
         sql_results = """select * from results where bin_address = %s
-        """
+                            """
         sql_pre = """select address from functions where address < %s
-                    order by address desc    
-        """
+                                        order by address desc    
+                            """
         sql_bck = """select address from functions where address > %s
-                    order by address
-        """
+                                        order by address
+                            """
         sql_bin = """select name, address from functions where address = %s
-                """
+                            """
         sql_src = """select id, name, address from diff.functions where address > %s and address < %s
-        """
-
-        self.cur.execute(sql)
-        rows = self.cur.fetchall()
+                            """
         sum = 0
-        pairs = {}
-        for row in rows:
-            try:
-                pairs[str(row[0])].append(str(row[4]))
-            except:
-                pairs[str(row[0])] = []
-                pairs[str(row[0])].append(str(row[4]))
         for bin_func in pairs.keys():
+            if int(bin_func) not in self.functions:
+                continue
             self.cur.execute(sql_pre % bin_func)
             one = self.cur.fetchone()
             if one is None:
@@ -635,12 +599,56 @@ class PerfectMatch:
             if str(src[0][2]) in pairs[bin_func]:
                 self.cur.execute(sql_bin % bin_func)
                 bin = self.cur.fetchone()
-                l = (str(bin[1]), str(bin[0]), str(src[0][2]), str(src[0][1]), 'Neighbor Match')
+                l = (str(bin[1]), str(bin[0]), str(src[0][2]), str(src[0][1]), rule)
                 self.do_insert_results(l)
-                sum += 1
+                if int(bin_func) in self.functions:
+                    self.functions.remove(int(bin_func))
+                    sum += 1
+        return sum
 
+    def do_constants_neighbor_match(self):
+        sql_opt = SqlOperate(self.bin_name)
+        bin_dict = sql_opt.read_constants()
+        src_dict = sql_opt.read_constants(self.src_name)
+        self.conn, self.cur = sql_opt.attach(self.src_name)
+        pairs = {}
+        for constants, funcs_id in bin_dict.items():
+            for func_id in funcs_id:
+                if constants in src_dict.keys():
+                    src_funcs_id = src_dict[constants]
+                    for src_func_id in src_funcs_id:
+                        try:
+                            pairs[func_id].append(src_func_id)
+                        except:
+                            pairs[func_id] = [src_func_id]
+        return self.do_neighbor_match(pairs, 'Long Constants Neighbor Match')
+
+    def neighbor_match(self):
+        t0 = time.time()
+        sql_op = SqlOperate(self.bin_name)
+        sql_op.create_results()
+        self.conn, self.cur = sql_op.attach(self.src_name)
+        rules = ['Bytes Hash Neighbor Match', 'Mnemonics Neighbor Match', 'Constants Neighbor Match',
+                 'MD Index Neighbor Match', 'KOKA Hash Neighbor Match']
+        sum = 0
+        for rule in rules:
+            sql = sql_dict[rule]
+            self.cur.execute(sql)
+            rows = self.cur.fetchall()
+            pairs = {}
+            for row in rows:
+                try:
+                    pairs[str(row[0])].append(str(row[4]))
+                except:
+                    pairs[str(row[0])] = [str(row[4])]
+            sum += self.do_neighbor_match(pairs, rule)
         if self.cur is not None:
             self.cur.close()
+
+        sum += self.do_constants_neighbor_match()
+        if self.cur is not None:
+            self.cur.close()
+
         time_elapsed = time.time() - t0
         print('Neighbor Match:' + str(sum))
         print('Neighbor Match {:.0f}m {:.0f}s'.format(
@@ -650,14 +658,15 @@ class PerfectMatch:
         # self.save_functions()
         self.strings_match()
         self.bytes_hash_match()
-        # self.save_constants()
+        self.save_constants()
         self.constants_match()
-        # self.update_cfg_hash()
+        self.update_cfg_hash()
         self.cfg_hash_match()
         self.neighbor_match()
-        # self.save_callers()
+        self.save_callers()
         self.caller_match()
         self.neighbor_match()
+        self.caller_match()
 
     def analyse_symbol(self):
         self.save_functions()

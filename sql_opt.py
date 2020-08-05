@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import sqlite3
+import json
 
 
 sql_dict = {}
@@ -20,7 +21,7 @@ sql_dict['Same Name Match'] = """select distinct f.address ea, f.name bin_name, 
         where (df.mangled_function = f.mangled_function
             or df.name = f.name)
         """
-sql_dict['Bytes Hash Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+sql_dict['Rare Bytes Hash Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
         df.address src_address, 'Bytes Hash Match' description
                     from (select * from functions group by function_hash having count(function_hash) = 1) f,
                     (select * from diff.functions group by function_hash having count(function_hash) = 1) df
@@ -33,7 +34,8 @@ sql_dict['Rare Mnemonics Match'] = """select distinct f.address ea, f.name bin_n
                     (select * from diff.functions group by mnemonics having count(mnemonics) = 1) df
                     where f.mnemonics = df.mnemonics
                     and f.instructions = df.instructions
-                    and f.instructions > 5 
+                    and f.numbers = df.numbers
+                    and f.instructions > 5
                     and f.address not in (select bin_address from results)       
             """
 sql_dict['Rare Constants Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
@@ -59,19 +61,20 @@ sql_dict['Mnemonics Constants match'] = """select distinct f.address ea, f.name 
             """
 sql_dict['Rare Md_Index Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
                         df.address src_address, 'Rare MD Index Match' description
-                from (select * from main.functions where md_index != 0 group by md_index having count(*) == 1) f,
+                from (select * from functions where md_index != 0 group by md_index having count(*) == 1) f,
                      (select * from diff.functions where md_index != 0 group by md_index having count(*) == 1) df
                 where f.md_index = df.md_index
                 and f.size = df.size
-                and f.nodes > 5
+                and f.instructions = df.instructions
                 and f.address not in (select bin_address from results)
         """
 sql_dict['Rare KOKA Hash Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
                         df.address src_address, 'Rare KOKA Hash Match' description
-           from (select * from main.functions where kgh_hash != 0 group by kgh_hash having count(*) == 1) f,
+           from (select * from functions where kgh_hash != 0 group by kgh_hash having count(*) == 1) f,
                 (select * from diff.functions where kgh_hash != 0 group by kgh_hash having count(*) == 1) df
                 where f.kgh_hash = df.kgh_hash
-                and f.nodes > 5
+                and f.size = df.size
+                and f.instructions = df.instructions
                 and f.address not in (select bin_address from results) 
 """
 sql_dict['Md_Index Constants Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
@@ -85,66 +88,63 @@ sql_dict['Md_Index Constants Match'] = """select distinct f.address ea, f.name b
                 and f.address not in (select bin_address from results)
                 group by f.address having count(f.address) = 1 
         """
-sql_dict['neighbor_match'] = """select distinct f.address bin_addr, f.name bin_name, df.id src_id, df.name src_name, df.address src_addr,
-                    'Bytes Hash Match' description, f.id bin_id
+sql_dict['KOKA Hash Constants Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
+                        df.address src_address, 'MD_Index and Constants Match' description
+                from functions f,
+                     diff.functions df
+                where f.md_index = df.md_index
+                and f.nodes > 5
+                and f.constants = df.constants
+                and f.constants_count > 0
+                and f.address not in (select bin_address from results)
+                group by f.address having count(f.address) = 1 
+        """
+sql_dict['Bytes Hash Neighbor Match'] = """select distinct f.address bin_addr, f.name bin_name, df.id src_id, df.name src_name, df.address src_addr,
+                    'Bytes Hash Neighbor Match' description, f.id bin_id
                     from functions f,
                         diff.functions df
                     where f.function_hash = df.function_hash
                     and f.address not in (select bin_address from results)
-                    union
+        """
+sql_dict['Mnemonics Neighbor Match'] = """
                     select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
-                    'Mnemonics Match' description, f.id bin_id
+                    'Mnemonics Neighbor Match' description, f.id bin_id
                     from functions f,
                         diff.functions df
                     where f.mnemonics = df.mnemonics
                     and f.instructions = df.instructions
-                    and f.instructions > 5 and df.instructions > 5
+                    and f.instructions > 5
                     and f.address not in (select bin_address from results)
-                    union
+        """
+sql_dict['Constants Neighbor Match'] = """
                     select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
-                    'md_index Match' description, f.id bin_id
-                    from functions f,
-                        diff.functions df
-                    where f.md_index = df.md_index
-                    and f.nodes > 5
-                    and f.address not in (select bin_address from results)
-                    union
-                    select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
-                    'kgh_hash Match' description, f.id bin_id
-                    from functions f,
-                        diff.functions df
-                    where f.kgh_hash = df.kgh_hash
-                    and f.nodes > 5
-                    and f.address not in (select bin_address from results)
-                    union
-                    select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
-                    'Constants Match' description, f.id bin_id
+                    'Constants Neighbor Match' description, f.id bin_id
                     from functions f,
                         diff.functions df
                     where f.constants = df.constants
                     and f.constants_count > 0
                     and f.address not in (select bin_address from results)
-                    union
-                    select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
-                        df.address src_address, 'MD_Index and Constants Match' description, f.id bin_id
-                    from functions f,
-                        diff.functions df
+        """
+sql_dict['MD Index Neighbor Match'] = """
+                    select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
+                    'MD Index Neighbor Match' description, f.id bin_id
+                    from (select * from functions where md_index != 0) f,
+                        (select * from diff.functions where md_index != 0) df
                     where f.md_index = df.md_index
-                    and f.nodes > 5
-                    and f.constants = df.constants
-                    and f.constants_count > 1
+                    and f.size = df.size
+                    and f.instructions = df.instructions
                     and f.address not in (select bin_address from results)
         """
-
-sql_dict['Test Bytes Hash Match'] = """select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
-                    'Bytes Hash Match' description
-                    from functions f,
-                        diff.functions df
-                    where f.function_hash = df.function_hash
-                    and f.instructions > 5
+sql_dict['KOKA Hash Neighbor Match'] = """
+                    select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
+                    'KOKA Hash Neighbor Match' description, f.id bin_id
+                    from (select * from functions where kgh_hash != 0) f,
+                        (select * from diff.functions where kgh_hash != 0) df
+                    where f.kgh_hash = df.kgh_hash
+                    and f.size = df.size
+                    and f.instructions = df.instructions
                     and f.address not in (select bin_address from results)
-                    group by f.function_hash
-"""
+        """
 
 class SqlOperate:
     def __init__(self, name):
@@ -220,6 +220,8 @@ class SqlOperate:
             md_index text,
             constants text,
             constants_count integer,
+            numbers text,
+            numbers_count integer,
             assembly_addrs text,
             kgh_hash text,
             callers text,
@@ -272,15 +274,45 @@ class SqlOperate:
         self.cur.close()
         return res
 
+    def read_constants(self, name=None):
+        if name is None:
+            self.connect()
+            sql_func_id = """select distinct func_id from constants 
+                        group by func_id having count(func_id) > 1
+                """
+            sql_cons = """select constant from constants where func_id = %s"""
+        else:
+            self.attach(name)
+            sql_func_id = """select distinct func_id from diff.constants 
+                        group by func_id having count(func_id) > 1
+                """
+            sql_cons = """select constant from diff.constants where func_id = %s"""
+        self.cur.execute(sql_func_id)
+        rows = self.cur.fetchall()
+        dict = {}
+        for row in rows:
+            self.cur.execute(sql_cons % str(row[0]))
+            constants = self.cur.fetchall()
+            new_constants = []
+            for constant in constants:
+                new_constants.append(str(constant))
+            new_constants = json.dumps(new_constants)
+            try:
+                dict[new_constants].append(str(row[0]))
+            except:
+                dict[new_constants] = [str(row[0])]
+        if self.cur is not None:
+            self.cur.close()
+        return dict
 
     def read_results_test(self):
         # self.connect()
         sql = """select src_address, bin_address from results where 
-            description = 'Rare MD Index Match'
+            description = 'Rare Mnemonics Match' order by bin_address
         """
-        sql_bin = """select name, size from functions where address = %s
+        sql_bin = """select name, constants, numbers, instructions from functions where address = %s
         """
-        sql_src = """select name, size from diff.functions where address = %s
+        sql_src = """select name, constants, numbers, instructions from diff.functions where address = %s
         """
         self.cur.execute(sql)
         rows = self.cur.fetchall()
@@ -291,22 +323,29 @@ class SqlOperate:
             bin = self.cur.fetchone()
             self.cur.execute(sql_src % row[0])
             src = self.cur.fetchone()
-            if bin and src:
+            if bin and src and bin[2] != src[2]:
                 s += 1
-                if bin[1] == src[1]:
-                    print row[0] + '->' + row[1]
-                    sum += 1
+                print bin[2]
+                print src[2]
+                print row[1] + '->' + row[0]
         print sum, s
 
-    def test_sql(self, name, s):
+    def test_sql(self, name):
         self.attach(name)
-        self.cur.execute(sql_dict[s])
+        sql = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
+                        df.address src_address, 'Rare MD Index Match' description
+                from (select * from functions where md_index != 0 group by md_index having count(*) == 1) f,
+                     (select * from diff.functions where md_index != 0 group by md_index having count(*) == 1) df
+                where f.md_index = df.md_index
+                and f.size = df.size
+                and f.instructions = df.instructions
+                and f.address not in (select bin_address from results)
+        """
+        self.cur.execute(sql)
         rows = self.cur.fetchall()
         for row in rows:
             print str(row[4]) + '->' + str(row[0])
         print len(rows)
-
-
 
 """
 name = "C:\\Users\\Admin\\Desktop\\data6\\libcpp_tests_noSymbol.sqlite"
@@ -314,11 +353,4 @@ src_name = "C:\\Users\\Admin\\Desktop\\data6\\diff.sqlite"
 sql_opt = SqlOperate(name)
 sql_opt.attach(src_name)
 sql_opt.read_results_test()
-
-conn, cur = sql_opt.attach(src_name)
-cur.execute(sql_dict['cfg_hash_match'])
-rows = cur.fetchall()
-for row in rows:
-    print str(row[4]) + '->' + str(row[0])
-print len(rows)
 """
