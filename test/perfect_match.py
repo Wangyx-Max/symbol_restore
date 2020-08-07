@@ -693,19 +693,18 @@ class PerfectMatch:
 
     def do_perfect_match(self, module='init and match'):
         if module == 'init and match':
-            self.save_functions()
+            # self.save_functions()
             self.strings_match()
             self.bytes_hash_match()
-            self.save_constants()
-            self.constants_match()
-            self.update_cfg_hash()
-            self.cfg_hash_match()
-            self.neighbor_match_single()
-            self.save_callers()
-            self.call_match()
-            self.neighbor_match_single()
-            self.call_match()
-
+            # self.save_constants()
+            # self.constants_match()
+            # self.update_cfg_hash()
+            # self.cfg_hash_match()
+            # self.neighbor_match_single()
+            # self.save_callers()
+            # self.call_match()
+            # self.neighbor_match_single()
+            # self.call_match()
         if module == 'match':
             self.strings_match()
             self.bytes_hash_match()
@@ -720,7 +719,7 @@ class PerfectMatch:
 
     def analyse_symbol(self):
         self.save_functions()
-        self.save_constants()
-        self.update_cfg_hash()
-        self.save_callers()
+        # self.save_constants()
+        # self.update_cfg_hash()
+        # self.save_callers()
 

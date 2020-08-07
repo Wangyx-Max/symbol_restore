@@ -42,7 +42,7 @@ sql_dict['Rare Mnemonics Match'] = """select distinct f.address ea, f.name bin_n
 sql_dict['Rare Numbers Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
                 df.address src_address, 'Rare Numbers Match' description
                     from (select * from functions group by mnemonics having count(numbers) = 1) f,
-                    diff.functions df
+                    (select * from diff.functions group by mnemonics having count(numbers) = 1) df
                     where f.numbers = df.numbers
                     and f.numbers_count > 15
                     and f.address not in (select bin_address from results)
@@ -51,7 +51,7 @@ sql_dict['Rare Numbers Match'] = """select distinct f.address ea, f.name bin_nam
 sql_dict['Rare Constants Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
                 df.address src_address, 'Rare Constants Match' description
                     from (select * from functions group by constants having count(constants) = 1) f,
-                    diff.functions df
+                    (select * from diff.functions group by constants having count(constants) = 1) df
                     where f.constants = df.constants
                     and f.address not in (select bin_address from results) 
                     group by ea having count(ea) = 1
@@ -61,7 +61,7 @@ sql_dict['Mnemonics Constants match'] = """select distinct f.address ea, f.name 
                     from functions f,
                         diff.functions df
                     where f.mnemonics = df.mnemonics
-                    and f.constants = df.constants
+                    and f.constants = df.constants or f.numbers = df.numbers
                     and f.address not in (select bin_address from results)
                     group by ea having count(ea) = 1  
             """

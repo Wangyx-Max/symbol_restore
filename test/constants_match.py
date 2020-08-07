@@ -44,6 +44,18 @@ class ConstantsMatch:
             return False
         return True
 
+    def constant_filter(self, value):
+        if value & 0xFFFFFF00 == 0xFFFFFF00:
+            return value ^ 0xFFFFFF00
+        if value & 0xFFFF00 == 0xFFFF00:
+            return value ^ 0xFFFF00
+        if value & 0xFFFFFFFFFFFFFF00 == 0xFFFFFFFFFFFFFF00:
+            return value ^ 0xFFFFFFFFFFFFFF00
+        if value & 0xFFFFFFFFFFFF00 == 0xFFFFFFFFFFFF00:
+            return value ^ 0xFFFFFFFFFFFF00
+
+        return value
+
     def constants(self, func, all_names):
         constants = []
         strings = []
