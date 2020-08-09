@@ -8,14 +8,11 @@ from hashlib import md5
 from sql_opt import *
 from cfg_hash import CFGHash
 
-f = open('results.txt' ,'w')
+f = open('results.txt', 'w')
 
-class PerfectMatch:
-    def __init__(self, bin_name, src_name = None):
-        self.bin_name = bin_name
-        self.src_name = src_name
-        self.src_matched = set() #func_id
-        self.bin_matched = set() #startEA of a function
+class AnalyseFunction:
+    def __init__(self, name):
+        self.name = name
         self.min_ea = MinEA()
         self.max_ea = MaxEA()
         self.functions = list(Functions(self.min_ea, self.max_ea))
@@ -57,6 +54,7 @@ class PerfectMatch:
         function_hash = []
         mnems = []
         nums = []
+        nums2 = []
 
         flags = GetFunctionFlags(int(f))
         func = get_func(f)
@@ -80,12 +78,16 @@ class PerfectMatch:
                 nums.append(GetOperandValue(line, 1))
             if mnem != '' and GetOpType(line, 2) == o_imm:
                 nums.append(GetOperandValue(line, 2))
+            if mnem != '' and GetOpType(line, 1) == o_imm:
+                nums2.append(GetOperandValue(line, 1))
 
+        if instructions > 5:
+            nums2 = []
 
         function_hash = md5("".join(function_hash)).hexdigest()
 
         l = (name, true_name, f, flags, size, instructions,
-             function_hash, mnems, nums, len(nums))
+             function_hash, mnems, nums, len(nums), nums2, len(nums2))
         return l
 
     def read_cfg_hash(self, f):
@@ -111,7 +113,7 @@ class PerfectMatch:
                     if get_func(dref) is None:
                         str_constant = GetString(dref, -1, -1)
                         if str_constant is not None:
-                            if str_constant not in constants:
+                            if str_constant not in constants and len(str_constant) > 2:
                                 constants.append(str_constant)
                                 # print hex(x), str_constant
                                 # print hex(x), str_constant
@@ -148,42 +150,15 @@ class PerfectMatch:
                 props.append(prop)
         return props
 
-    def do_insert_results(self, l):
-        """
-        @ param l : bin_address, bin_name, src_address, src_name, description
-        """
-        props = self.create_sql_props(l)
-        sql_insert = """insert or ignore into results (
-                    bin_address, bin_name, src_address, src_name, description) 
-                    values (?, ?, ?, ?, ?)"""
-        self.cur.execute(sql_insert, props)
-        self.conn.commit()
-
-    def insert_results(self, sql):
-        self.cur.execute(sql)
-        rows = self.cur.fetchall()
-        sum = 0
-        for row in rows:
-            if str(row[2]) in self.src_matched:
-                continue
-            self.bin_matched.add(str(row[0]))
-            self.src_matched.add(str(row[2]))
-            if int(str(row[0])) in self.functions:
-                self.functions.remove(int(str(row[0])))
-                sum += 1
-            l = (str(row[0]), str(row[1]), str(row[4]), str(row[3]), str(row[5]))
-            self.do_insert_results(l)
-        return sum
-
     def do_insert_function(self, l):
         """
-        @ param l : name, true_name,f, flags, size, instructions, function_hash, mnems, nums, nums_count
+        @ param l : name, true_name,f, flags, size, instructions, function_hash, mnems, nums, nums_count, nums2, nums2_count
         """
         props = self.create_sql_props(l)
         sql = """insert or ignore into functions (name, mangled_function, address, function_flags, size, instructions,
-                    function_hash, mnemonics, numbers, numbers_count)
+                    function_hash, mnemonics, numbers, numbers_count, numbers2, numbers2_count)
             values (?, ?, ?, ?, ?, ?, 
-                    ?, ?, ?, ?)
+                    ?, ?, ?, ?, ?, ?)
         """
         self.cur.execute(sql, props)
         self.conn.commit()
@@ -250,12 +225,12 @@ class PerfectMatch:
         self.cur.execute(sql, props)
         self.conn.commit()
 
-    def save_functions(self):
+    def save_functions(self, functions):
         t0 = time.time()
-        sql_op = SqlOperate(self.bin_name)
+        sql_op = SqlOperate(self.name)
         sql_op.create_functions()
         self.conn, self.cur = sql_op.connect()
-        for func in self.functions:
+        for func in functions:
             l = self.read_function(func)
             if l is False:
                 continue
@@ -265,12 +240,12 @@ class PerfectMatch:
         print('Create Functions {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
 
-    def save_constants(self):
+    def save_constants(self, functions):
         t0 = time.time()
-        sql_op = SqlOperate(self.bin_name)
+        sql_op = SqlOperate(self.name)
         sql_op.create_constants()
         self.conn, self.cur = sql_op.connect()
-        for func in self.functions:
+        for func in functions:
             l = self.read_constants(func)
             if l is False:
                 continue
@@ -280,12 +255,27 @@ class PerfectMatch:
         print('Create Constants {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
 
-    def save_callers(self):
+    def update_cfg_hash(self, functions):
         t0 = time.time()
-        sql_op = SqlOperate(self.bin_name)
+        sql_op = SqlOperate(self.name)
+        sql_op.create_functions()
+        self.conn, self.cur = sql_op.connect()
+        for func in functions:
+            l = self.read_cfg_hash(func)
+            if l is False:
+                continue
+            self.do_update_cfg_hash(l)
+        self.cur.close()
+        time_elapsed = time.time() - t0
+        print('update cfg hash {:.0f}m {:.0f}s'.format(
+            time_elapsed // 60, time_elapsed % 60))
+
+    def save_callers(self, functions):
+        t0 = time.time()
+        sql_op = SqlOperate(self.name)
         sql_op.create_callers()
         self.conn, self.cur = sql_op.connect()
-        for func in list(Functions(self.min_ea, self.max_ea)):
+        for func in functions:
             l = self.read_callers(func)
             if l is False:
                 continue
@@ -293,6 +283,64 @@ class PerfectMatch:
         self.cur.close()
         time_elapsed = time.time() - t0
         print("Create Callers {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+
+    def save_code(self, functions):
+        t0 = time.time()
+        sql_op = SqlOperate(self.name)
+        self.conn, self.cur = sql_op.connect()
+        for func in functions:
+            l = self.read_callers(func)
+            if l is False:
+                continue
+            self.do_
+
+    def analyse_symbol(self):
+        self.save_functions(self.functions)
+        self.save_constants(self.functions)
+        self.update_cfg_hash(self.functions)
+        self.save_callers(self.functions)
+
+
+
+class PerfectMatch:
+    def __init__(self, bin_name, src_name):
+        self.bin_name = bin_name
+        self.src_name = src_name
+        self.src_matched = set() #func_id
+        self.bin_matched = set() #startEA of a function
+        self.min_ea = MinEA()
+        self.max_ea = MaxEA()
+        self.functions = list(Functions(self.min_ea, self.max_ea))
+        self.analyse_func = AnalyseFunction(self.bin_name)
+        self.conn = False
+        self.cur = False
+
+    def do_insert_results(self, l):
+        """
+        @ param l : bin_address, bin_name, src_address, src_name, description
+        """
+        props = self.analyse_func.create_sql_props(l)
+        sql_insert = """insert or ignore into results (
+                    bin_address, bin_name, src_address, src_name, description) 
+                    values (?, ?, ?, ?, ?)"""
+        self.cur.execute(sql_insert, props)
+        self.conn.commit()
+
+    def insert_results(self, sql):
+        self.cur.execute(sql)
+        rows = self.cur.fetchall()
+        sum = 0
+        for row in rows:
+            if str(row[2]) in self.src_matched:
+                continue
+            self.bin_matched.add(str(row[0]))
+            self.src_matched.add(str(row[2]))
+            if int(str(row[0])) in self.functions:
+                self.functions.remove(int(str(row[0])))
+                sum += 1
+            l = (str(row[0]), str(row[1]), str(row[4]), str(row[3]), str(row[5]))
+            self.do_insert_results(l)
+        return sum
 
     def do_match_string(self, length, count, strings):
         sql = sql_dict['strings_match']
@@ -327,9 +375,6 @@ class PerfectMatch:
             value = list(value)
             if len(value) >= count:
                 funcs_id[str(sql_result[str(value[0])])] = key
-                print key
-                for string in value:
-                    print str(string)
 
         sql = "select name, address from diff.functions where id = %s"
         sum = 0
@@ -385,21 +430,6 @@ class PerfectMatch:
         time_elapsed = time.time() - t0
         print('Bytes Hash Match:' + str(sum))
         print("Bytes Hash Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
-
-    def update_cfg_hash(self):
-        t0 = time.time()
-        sql_op = SqlOperate(self.bin_name)
-        sql_op.create_functions()
-        self.conn, self.cur = sql_op.connect()
-        for func in self.functions:
-            l = self.read_cfg_hash(func)
-            if l is False:
-                continue
-            self.do_update_cfg_hash(l)
-        self.cur.close()
-        time_elapsed = time.time() - t0
-        print('update cfg hash {:.0f}m {:.0f}s'.format(
-            time_elapsed // 60, time_elapsed % 60))
 
     def do_constants_match(self):
         sql_opt = SqlOperate(self.bin_name)
@@ -475,9 +505,9 @@ class PerfectMatch:
         """
         sql_src = """select * from diff.callers where caller_address = %s order by call_address
         """
-        sql_func_bin = """select name, numbers, size, instructions from functions where address = %s
+        sql_func_bin = """select name, numbers, numbers_count, numbers2, numbers2_count, instructions, size from functions where address = %s
         """
-        sql_func_src = """select name, numbers, size, instructions from diff.functions where address = %s
+        sql_func_src = """select name, numbers, numbers_count, numbers2, numbers2_count, instructions, size from diff.functions where address = %s
         """
         sum = 0
         for row in rows:
@@ -495,41 +525,24 @@ class PerfectMatch:
             callers_src = []
             for caller in callers:
                 callers_src.append(caller[3])
-            if len(callers_bin) != len(callers_src):
-                f.write(row[0] + '->' + row[2] + ' ' + row[4] + '\n')
-                for caller_bin in callers_bin:
-                    if int(caller_bin) not in self.functions:
-                        continue
-                    for caller_src in callers_src:
-                        self.cur.execute(sql_func_bin % caller_bin)
-                        bin = self.cur.fetchone()
-                        self.cur.execute(sql_func_src % caller_src)
-                        src = self.cur.fetchone()
-                        if src[1] == bin[1] and src[3] == bin[3]:
-                            l = (caller_bin, bin[0], caller_src, src[0], 'Callee Test Match')
-                            self.do_insert_results(l)
-                            if int(caller_bin) in self.functions:
-                                self.functions.remove(int(caller_bin))
-                            callers_src.remove(caller_src)
-                            sum += 1
-                            break
-            else:
-                for caller_bin in callers_bin:
-                    if int(caller_bin) not in self.functions:
-                        continue
-                    for caller_src in callers_src:
-                        self.cur.execute(sql_func_bin % caller_bin)
-                        bin = self.cur.fetchone()
-                        self.cur.execute(sql_func_src % caller_src)
-                        src = self.cur.fetchone()
-                        if src[1] == bin[1] and src[1] == bin[1] and src[3] == bin[3]:
-                            l = (caller_bin, bin[0], caller_src, src[0], 'Callee Match')
-                            self.do_insert_results(l)
-                            if int(caller_bin) in self.functions:
-                                self.functions.remove(int(caller_bin))
-                            callers_src.remove(caller_src)
-                            sum += 1
-                            break
+            for caller_bin in callers_bin:
+                if int(caller_bin) not in self.functions:
+                    continue
+                for caller_src in callers_src:
+                    self.cur.execute(sql_func_bin % caller_bin)
+                    bin = self.cur.fetchone()
+                    self.cur.execute(sql_func_src % caller_src)
+                    src = self.cur.fetchone()
+                    if (src[1] == bin[1] and int(bin[2]) > 5) or\
+                            (src[3] == bin[3] and int(bin[4]) > 3) or\
+                            src[5] == bin[5] or src[6] == bin[6]:
+                        l = (caller_bin, bin[0], caller_src, src[0], 'Callee Match')
+                        self.do_insert_results(l)
+                        if int(caller_bin) in self.functions:
+                            self.functions.remove(int(caller_bin))
+                        callers_src.remove(caller_src)
+                        sum += 1
+                        break
 
         if self.cur is not None:
             self.cur.close()
@@ -693,15 +706,15 @@ class PerfectMatch:
 
     def do_perfect_match(self, module='init and match'):
         if module == 'init and match':
-            self.save_functions()
+            self.analyse_func.save_functions(self.functions)
             self.strings_match()
             self.bytes_hash_match()
-            self.save_constants()
+            self.analyse_func.save_constants(self.functions)
             self.constants_match()
-            self.update_cfg_hash()
+            self.analyse_func.update_cfg_hash(self.functions)
             self.cfg_hash_match()
             self.neighbor_match_single()
-            self.save_callers()
+            self.analyse_func.save_callers(list(Functions(self.min_ea, self.max_ea)))
             self.call_match()
             self.neighbor_match_single()
             self.call_match()
@@ -709,18 +722,13 @@ class PerfectMatch:
         if module == 'match':
             self.strings_match()
             self.bytes_hash_match()
-            self.save_constants()
+            # self.analyse_func.save_constants(self.functions)
             self.constants_match()
-            self.update_cfg_hash()
+            # self.analyse_func.update_cfg_hash(self.functions)
             self.cfg_hash_match()
             self.neighbor_match_single()
             self.call_match()
             self.neighbor_match_single()
             self.call_match()
 
-    def analyse_symbol(self):
-        self.save_functions()
-        self.save_constants()
-        self.update_cfg_hash()
-        self.save_callers()
 

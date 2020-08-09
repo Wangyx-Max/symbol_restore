@@ -8,9 +8,23 @@ t0 = time.time()
 sqlite_db = "C:\\Users\\Admin\\Desktop\\data7\\libcpp_tests_noSymbol.sqlite"
 sym_db = "C:\\Users\\Admin\\Desktop\\data7\\diff.sqlite"
 sql_op = SqlOperate(sqlite_db)
-# conn, cur = sql_op.attach(sym_db)
-sql_op.test_sql_dict(sym_db, 'Rare Mnemonics Match')
+sql_op.test_sql_dict(sym_db, 'Md_Index Constants Match', True)
 
+
+"""
+rows = sql_op.read_results_des("\'Mnemonics and Constants Match\'")
+compere_db = "C:\\Users\\Admin\\Desktop\\data6\\results.db"
+sql_op = SqlOperate(compere_db)
+compere_rows = sql_op.read_results()
+arr = {}
+for row in compere_rows:
+    arr[row[0]] = [row[2], row[4]]
+for row in rows:
+    if row[0] not in arr.keys():
+        print row[0] + '->' + row[2]
+    elif arr[row[0]][0] != row[2]:
+        print row[0] + '->' + row[2] + '  might wrong  ' + arr[row[0]][0] + ' ' + arr[row[0]][1]
+"""
 
 
 """
