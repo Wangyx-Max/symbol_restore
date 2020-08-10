@@ -5,10 +5,17 @@ import time
 
 t0 = time.time()
 # sqlite_db = os.path.splitext(GetIdbPath())[0] + ".sqlite"
-sqlite_db = "C:\\Users\\Admin\\Desktop\\data7\\libcpp_tests_noSymbol.sqlite"
+sqlite_db = "C:\\Users\\Admin\\Downloads\\Magical Pairs Pair Matching Puzzle_v1.1.8.2_apkpure.com\\lib\\armeabi-v7a\\libMyGame.sqlite"
 sym_db = "C:\\Users\\Admin\\Desktop\\data7\\diff.sqlite"
 sql_op = SqlOperate(sqlite_db)
-sql_op.test_sql_dict(sym_db, 'Md_Index Constants Match', True)
+rows = sql_op.read_results()
+s = 0
+print len(rows)
+for row in rows:
+    if str(row[1]).startswith('sub_') or str(row[1]).startswith('nullsub_'):
+        print row[0] + '->' + row[2] + ' ' + row[4]
+        s += 1
+print s
 
 
 """

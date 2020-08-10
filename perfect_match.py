@@ -301,7 +301,6 @@ class AnalyseFunction:
         self.save_callers(self.functions)
 
 
-
 class PerfectMatch:
     def __init__(self, bin_name, src_name):
         self.bin_name = bin_name
@@ -467,7 +466,7 @@ class PerfectMatch:
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results()
         self.conn, self.cur = sql_op.attach(self.src_name)
-        rules_name = ['Rare Constants Match', 'Mnemonics Constants match']
+        rules_name = ['Rare Constants Match', 'Mnemonics Constants Match']
         for rules in rules_name:
             sql = sql_dict[rules]
             sum += self.insert_results(sql)
@@ -525,24 +524,38 @@ class PerfectMatch:
             callers_src = []
             for caller in callers:
                 callers_src.append(caller[3])
-            for caller_bin in callers_bin:
-                if int(caller_bin) not in self.functions:
+            if len(callers_bin) == 1 and len(callers_src) == 1:
+                if int(callers_bin[0]) not in self.functions:
                     continue
-                for caller_src in callers_src:
-                    self.cur.execute(sql_func_bin % caller_bin)
-                    bin = self.cur.fetchone()
-                    self.cur.execute(sql_func_src % caller_src)
-                    src = self.cur.fetchone()
-                    if (src[1] == bin[1] and int(bin[2]) > 5) or\
-                            (src[3] == bin[3] and int(bin[4]) > 3) or\
-                            src[5] == bin[5] or src[6] == bin[6]:
-                        l = (caller_bin, bin[0], caller_src, src[0], 'Callee Match')
-                        self.do_insert_results(l)
-                        if int(caller_bin) in self.functions:
-                            self.functions.remove(int(caller_bin))
-                        callers_src.remove(caller_src)
-                        sum += 1
-                        break
+                self.cur.execute(sql_func_bin % callers_bin[0])
+                bin = self.cur.fetchone()
+                self.cur.execute(sql_func_src % callers_src[0])
+                src = self.cur.fetchone()
+                if bin and src and src[1] == bin[1]:
+                    l = (callers_bin[0], bin[0], callers_src[0], src[0], 'Callee Match')
+                    self.do_insert_results(l)
+                    if int(callers_bin[0]) in self.functions:
+                        self.functions.remove(int(callers_bin[0]))
+                    sum += 1
+            else:
+                for caller_bin in callers_bin:
+                    if int(caller_bin) not in self.functions:
+                        continue
+                    for caller_src in callers_src:
+                        self.cur.execute(sql_func_bin % caller_bin)
+                        bin = self.cur.fetchone()
+                        self.cur.execute(sql_func_src % caller_src)
+                        src = self.cur.fetchone()
+                        if (src[1] == bin[1] and int(bin[2]) > 5) or\
+                                (src[3] == bin[3] and int(bin[4]) > 3) or\
+                                (src[1] == bin[1] and src[3] == bin[3] and src[5] == bin[5]):
+                            l = (caller_bin, bin[0], caller_src, src[0], 'Callee Match')
+                            self.do_insert_results(l)
+                            if int(caller_bin) in self.functions:
+                                self.functions.remove(int(caller_bin))
+                            callers_src.remove(caller_src)
+                            sum += 1
+                            break
 
         if self.cur is not None:
             self.cur.close()
@@ -556,13 +569,12 @@ class PerfectMatch:
             return
         # print len(rows)
         self.conn, self.cur = sql_op.attach(self.src_name)
-        sql_bin = """select callers, callers_count, numbers, name from functions where address = %s
+        sql_bin = """select callers, callers_count, name, numbers, numbers_count, numbers2, numbers2_count, instructions from functions where address = %s
         """
-        sql_src = """select callers, callers_count, numbers, name from diff.functions where address = %s
+        sql_src = """select callers, callers_count, name, numbers, numbers_count, numbers2, numbers2_count, instructions from diff.functions where address = %s
         """
         sum = 0
         for row in rows:
-            # print row
             self.cur.execute(sql_bin % row[0])
             bin = self.cur.fetchone()
             self.cur.execute(sql_src % row[2])
@@ -577,12 +589,34 @@ class PerfectMatch:
                 self.cur.execute(sql_src % src_addr)
                 src_c = self.cur.fetchone()
                 # print bin_c, src_c
-                if bin_c and src_c and bin_c[2] == src_c[2]:
-                    l = (bin_addr, str(bin_c[3]), src_addr, str(src_c[3]), 'Caller Match')
+                if bin_c and src_c and bin_c[3] == src_c[3]:
+                    l = (bin_addr, str(bin_c[2]), src_addr, str(src_c[2]), 'Caller Match')
                     self.do_insert_results(l)
                     if int(bin_addr) in self.functions:
                         self.functions.remove(int(bin_addr))
                     sum += 1
+            elif bin and src and int(bin[1]) == int(src[1]):
+                bins_addr = json.loads(str(bin[0]))
+                for bin_addr in bins_addr:
+                    if int(bin_addr) not in self.functions:
+                        continue
+                    srcs_addr = json.loads(str(src[0]))
+                    for src_addr in srcs_addr:
+                        self.cur.execute(sql_bin % bin_addr)
+                        bin_c = self.cur.fetchone()
+                        self.cur.execute(sql_src % src_addr)
+                        src_c = self.cur.fetchone()
+                        # print bin_c, src_c
+                        if bin_c and src_c and ((bin_c[3] == src_c[3] and int(bin_c[4]) > 5) or\
+                                                (bin_c[5] == src_c[5] and int(bin_c[6]) > 1) or\
+                                                (bin_c[3] == src_c[3] and bin_c[5] == src_c[5] and bin_c[7] == src_c[7])):
+                            l = (bin_addr, str(bin_c[2]), src_addr, str(src_c[2]), 'Caller Match')
+                            self.do_insert_results(l)
+                            if int(bin_addr) in self.functions:
+                                self.functions.remove(int(bin_addr))
+                            srcs_addr.remove(src_addr)
+                            sum += 1
+                            break
         return sum
 
     def call_match(self):
@@ -672,7 +706,7 @@ class PerfectMatch:
         sql_op.create_results()
         self.conn, self.cur = sql_op.attach(self.src_name)
         rules = ['Bytes Hash Neighbor Match', 'Mnemonics Neighbor Match', 'Constants Neighbor Match',
-                 'MD Index Neighbor Match', 'KOKA Hash Neighbor Match']
+                 'Numbers Neighbor Match', 'MD Index Neighbor Match', 'KOKA Hash Neighbor Match']
         sum = 0
         for rule in rules:
             sql = sql_dict[rule]
@@ -704,10 +738,10 @@ class PerfectMatch:
             s = self.neighbor_match_single()
         print('Neighbor Match Finished')
 
-    def do_perfect_match(self, module='init and match'):
+    def do_perfect_match(self, module='match'):
         if module == 'init and match':
             self.analyse_func.save_functions(self.functions)
-            self.strings_match()
+            # self.strings_match()
             self.bytes_hash_match()
             self.analyse_func.save_constants(self.functions)
             self.constants_match()
@@ -718,9 +752,10 @@ class PerfectMatch:
             self.call_match()
             self.neighbor_match_single()
             self.call_match()
+            self.neighbor_match()
 
         if module == 'match':
-            self.strings_match()
+            # self.strings_match()
             self.bytes_hash_match()
             # self.analyse_func.save_constants(self.functions)
             self.constants_match()
@@ -730,5 +765,6 @@ class PerfectMatch:
             self.call_match()
             self.neighbor_match_single()
             self.call_match()
+            self.neighbor_match()
 
 
