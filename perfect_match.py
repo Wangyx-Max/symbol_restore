@@ -8,7 +8,6 @@ from hashlib import md5
 from sql_opt import *
 from cfg_hash import CFGHash
 
-f = open('results.txt', 'w')
 
 class AnalyseFunction:
     def __init__(self, name):
@@ -60,12 +59,20 @@ class AnalyseFunction:
         func = get_func(f)
         name = GetFunctionName(int(f))
         true_name = name
-        demangle_name = Demangle(name, INF_SHORT_DN)
-        if demangle_name is None or demangle_name == "":
-            demangle_name = None
+        mangled_name = Demangle(name, INF_SHORT_DN)
+        if mangled_name is None or mangled_name == "":
+            mangled_name = None
 
-        if demangle_name is not None:
-            name = demangle_name
+        if mangled_name is not None:
+            name = mangled_name
+
+        if name.startswith('sub_') or name.startswith('nullsub_'):
+            name_hash = None
+        else:
+            name_hash = md5(name).hexdigest()
+        true_name_hash = None
+        if mangled_name is not None:
+            true_name_hash = md5(mangled_name).hexdigest()
 
         for line in list(Heads(func.startEA, func.endEA)):
             mnem = GetMnem(line)
@@ -86,7 +93,7 @@ class AnalyseFunction:
 
         function_hash = md5("".join(function_hash)).hexdigest()
 
-        l = (name, true_name, f, flags, size, instructions,
+        l = (name, true_name, name_hash, true_name_hash, f, flags, size, instructions,
              function_hash, mnems, nums, len(nums), nums2, len(nums2))
         return l
 
@@ -152,12 +159,12 @@ class AnalyseFunction:
 
     def do_insert_function(self, l):
         """
-        @ param l : name, true_name,f, flags, size, instructions, function_hash, mnems, nums, nums_count, nums2, nums2_count
+        @ param l : name, true_name, name_hash, mangled_hash, f, flags, size, instructions, function_hash, mnems, nums, nums_count, nums2, nums2_count
         """
         props = self.create_sql_props(l)
-        sql = """insert or ignore into functions (name, mangled_function, address, function_flags, size, instructions,
+        sql = """insert or ignore into functions (name, mangled_function, name_hash, mangled_hash, address, function_flags, size, instructions,
                     function_hash, mnemonics, numbers, numbers_count, numbers2, numbers2_count)
-            values (?, ?, ?, ?, ?, ?, 
+            values (?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?)
         """
         self.cur.execute(sql, props)
@@ -305,8 +312,8 @@ class PerfectMatch:
     def __init__(self, bin_name, src_name):
         self.bin_name = bin_name
         self.src_name = src_name
-        self.src_matched = set() #func_id
-        self.bin_matched = set() #startEA of a function
+        self.src_matched = set()  # func_id
+        self.bin_matched = set()  # startEA of a function
         self.min_ea = MinEA()
         self.max_ea = MaxEA()
         self.functions = list(Functions(self.min_ea, self.max_ea))
@@ -546,8 +553,8 @@ class PerfectMatch:
                         bin = self.cur.fetchone()
                         self.cur.execute(sql_func_src % caller_src)
                         src = self.cur.fetchone()
-                        if (src[1] == bin[1] and int(bin[2]) > 5) or\
-                                (src[3] == bin[3] and int(bin[4]) > 3) or\
+                        if (src[1] == bin[1] and int(bin[2]) > 5) or \
+                                (src[3] == bin[3] and int(bin[4]) > 3) or \
                                 (src[1] == bin[1] and src[3] == bin[3] and src[5] == bin[5]):
                             l = (caller_bin, bin[0], caller_src, src[0], 'Callee Match')
                             self.do_insert_results(l)
@@ -595,28 +602,7 @@ class PerfectMatch:
                     if int(bin_addr) in self.functions:
                         self.functions.remove(int(bin_addr))
                     sum += 1
-            elif bin and src and int(bin[1]) == int(src[1]):
-                bins_addr = json.loads(str(bin[0]))
-                for bin_addr in bins_addr:
-                    if int(bin_addr) not in self.functions:
-                        continue
-                    srcs_addr = json.loads(str(src[0]))
-                    for src_addr in srcs_addr:
-                        self.cur.execute(sql_bin % bin_addr)
-                        bin_c = self.cur.fetchone()
-                        self.cur.execute(sql_src % src_addr)
-                        src_c = self.cur.fetchone()
-                        # print bin_c, src_c
-                        if bin_c and src_c and ((bin_c[3] == src_c[3] and int(bin_c[4]) > 5) or\
-                                                (bin_c[5] == src_c[5] and int(bin_c[6]) > 1) or\
-                                                (bin_c[3] == src_c[3] and bin_c[5] == src_c[5] and bin_c[7] == src_c[7])):
-                            l = (bin_addr, str(bin_c[2]), src_addr, str(src_c[2]), 'Caller Match')
-                            self.do_insert_results(l)
-                            if int(bin_addr) in self.functions:
-                                self.functions.remove(int(bin_addr))
-                            srcs_addr.remove(src_addr)
-                            sum += 1
-                            break
+
         return sum
 
     def call_match(self):
@@ -738,7 +724,7 @@ class PerfectMatch:
             s = self.neighbor_match_single()
         print('Neighbor Match Finished')
 
-    def do_perfect_match(self, module='match'):
+    def do_perfect_match(self, module='init and match'):
         if module == 'init and match':
             self.analyse_func.save_functions(self.functions)
             # self.strings_match()
@@ -756,15 +742,14 @@ class PerfectMatch:
 
         if module == 'match':
             # self.strings_match()
+            # self.analyse_func.analyse_symbol()
             self.bytes_hash_match()
-            # self.analyse_func.save_constants(self.functions)
+            self.analyse_func.save_constants(self.functions)
             self.constants_match()
-            # self.analyse_func.update_cfg_hash(self.functions)
+            self.analyse_func.update_cfg_hash(self.functions)
             self.cfg_hash_match()
             self.neighbor_match_single()
             self.call_match()
             self.neighbor_match_single()
             self.call_match()
             self.neighbor_match()
-
-

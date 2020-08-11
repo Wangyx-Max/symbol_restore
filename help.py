@@ -1,15 +1,6 @@
-from sql_opt import *
+from perfect_match import *
 
-class PerfectMatch:
-    def __init__(self, bin_name, src_name):
-        self.bin_name = bin_name
-        self.src_name = src_name
-        self.src_matched = set()  # func_id
-        self.bin_matched = set()  # startEA of a function
-        # self.analyse_func = AnalyseFunction(self.bin_name)
-        self.conn = False
-        self.cur = False
-        self.functions = []
+"""
 
     def get_functions(self):
         sql_op = SqlOperate(self.bin_name)
@@ -25,10 +16,10 @@ class PerfectMatch:
             return
         # print len(rows)
         self.conn, self.cur = sql_op.attach(self.src_name)
-        sql_bin = """select callers, callers_count, name, numbers, numbers_count, numbers2, numbers2_count, instructions from functions where address = %s
-                """
-        sql_src = """select callers, callers_count, name, numbers, numbers_count, numbers2, numbers2_count, instructions from diff.functions where address = %s
-                """
+        sql_bin = "select callers, callers_count, name, numbers, numbers_count, numbers2, numbers2_count, instructions from functions where address = %s
+                "
+        sql_src = "select callers, callers_count, name, numbers, numbers_count, numbers2, numbers2_count, instructions from diff.functions where address = %s
+                "
         res = set()
         sum = 0
         for row in rows:
@@ -63,10 +54,10 @@ diff_name = "C:\\Users\\Admin\\Desktop\\data7\\diff.sqlite"
 pm = PerfectMatch(name, diff_name)
 pm.get_functions()
 pm.do_caller_match()
-
 """
-name = "C:\\Users\\Admin\\Desktop\\data7\\libcpp_tests_noSymbol.sqlite"
-sql = "update or ignore functions set numbers2 = ?, numbers2_count = ? where address = ?"
+
+name = "C:\\Users\\Admin\\Desktop\\sym_restore\\Sample2\\libMyGame.sqlite"
+sql = "update or ignore functions set name_hash = ?, mangled_hash = ? where address = ?"
 sql_op = SqlOperate(name)
 conn, cur = sql_op.connect()
 af = AnalyseFunction(name)
@@ -74,21 +65,24 @@ for f in list(Functions(MinEA(), MaxEA())):
     if af.func_check(f) is False:
         continue
     func = get_func(f)
-    nums2 = []
-    instructions = 0
-    for line in list(Heads(func.startEA, func.endEA)):
-        mnem = GetMnem(line)
-        instructions += 1
-        if mnem != '' and GetOpType(line, 1):
-            nums2.append(GetOperandValue(line, 1))
+    name = GetFunctionName(int(f))
+    true_name = name
+    demangle_name = Demangle(name, INF_SHORT_DN)
+    if demangle_name is None or demangle_name == "":
+        demangle_name = None
 
-    if instructions > 5:
-        nums2 = []
-    props = af.create_sql_props((nums2, len(nums2), f))
+    if demangle_name is not None:
+        name = demangle_name
+
+    name_hash = md5(name).hexdigest()
+    true_name_hash = None
+    if demangle_name is not None:
+        true_name_hash = md5(demangle_name).hexdigest()
+    props = af.create_sql_props((name_hash, true_name_hash, f))
     cur.execute(sql, props)
     conn.commit()
 cur.close()
-"""
+
 """
 name = "C:\\Users\\Admin\\Desktop\\data7\\diff.sqlite"
 af = AnalyseFunction(name)
@@ -96,7 +90,16 @@ af.save_constants(list(Functions(MinEA(), MaxEA())))
 """
 
 """
-
+class PerfectMatch:
+    def __init__(self, bin_name, src_name):
+        self.bin_name = bin_name
+        self.src_name = src_name
+        self.src_matched = set()  # func_id
+        self.bin_matched = set()  # startEA of a function
+        # self.analyse_func = AnalyseFunction(self.bin_name)
+        self.conn = False
+        self.cur = False
+        self.functions = []
 
     def do_match_string(self, length, strings):
         sql = sql_dict['strings_match']

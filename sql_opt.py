@@ -16,10 +16,15 @@ sql_dict['strings_match'] = """select * from diff.constants where func_id in (
                     """
 sql_dict['Same Name Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
                 df.address src_address, 'Same Name Match' description
-        from (select * from functions where name not like 'sub_%' and name not like 'nullsub_%' and name not like 'j_%')  f,
+        from functions f,
              diff.functions df
-        where (df.mangled_function = f.mangled_function
-            or df.name = f.name)
+        where df.name_hash = f.name_hash
+        union
+        select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
+                df.address src_address, 'Same Name Match' description
+        from functions f,
+             diff.functions df
+        where df.mangled_hash = f.mangled_hash
         """
 sql_dict['Rare Bytes Hash Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
         df.address src_address, 'Bytes Hash Match' description
@@ -42,12 +47,12 @@ sql_dict['Rare Mnemonics Match'] = """select distinct f.address ea, f.name bin_n
             """
 sql_dict['Rare Numbers Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
                 df.address src_address, 'Rare Numbers Match' description
-                    from (select * from functions where numbers_count > 5 or numbers2_count > 1 group by numbers, numbers2 having count(*) = 1) f,
+                    from (select * from functions where numbers_count > 10 or numbers2_count > 2 group by numbers, numbers2 having count(*) = 1) f,
                     diff.functions df
                     where f.numbers = df.numbers
                     and f.numbers2 = df.numbers2
                     and f.address not in (select bin_address from results)
-                    group by ea having count(ea) = 1
+                    group by src_func_id having count(*) = 1
 """
 sql_dict['Rare Constants Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
                 df.address src_address, 'Rare Constants Match' description
@@ -57,17 +62,17 @@ sql_dict['Rare Constants Match'] = """select distinct f.address ea, f.name bin_n
                     and f.numbers = df.numbers
                     and f.numbers2 = df.numbers2
                     and f.address not in (select bin_address from results) 
-                    group by src_func_id having count(src_func_id) = 1
+                    group by src_func_id having count(*) = 1
             """
 sql_dict['Mnemonics Constants Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
                 df.address src_address, 'Mnemonics and Constants Match' description
                     from functions f,
-                        (select * from diff.functions group by mnemonics, constants having count(*) = 1) df
+                        (select * from diff.functions where constants_count > 0 group by mnemonics, constants having count(*) = 1) df
                     where f.mnemonics = df.mnemonics
                     and f.constants = df.constants
-                    and f.constants_count > 1
+                    and f.numbers = df.numbers
                     and f.address not in (select bin_address from results)
-                    group by src_func_id having count(src_func_id) = 1  
+                    group by src_func_id having count(*) = 1  
             """
 sql_dict['Rare Md_Index Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
                         df.address src_address, 'Rare MD Index Match' description
@@ -77,7 +82,7 @@ sql_dict['Rare Md_Index Match'] = """select distinct f.address ea, f.name bin_na
                 and f.size = df.size 
                 and f.instructions = df.instructions
                 and f.address not in (select bin_address from results)
-                group by src_func_id having count(src_func_id) = 1 
+                group by src_func_id having count(*) = 1 
         """
 sql_dict['Rare KOKA Hash Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
                         df.address src_address, 'Rare KOKA Hash Match' description
@@ -88,31 +93,27 @@ sql_dict['Rare KOKA Hash Match'] = """select distinct f.address ea, f.name bin_n
                 and f.instructions = df.instructions
                 and f.numbers = df.numbers
                 and f.address not in (select bin_address from results)
-                group by src_func_id having count(src_func_id) = 1 
+                group by src_func_id having count(*) = 1 
 """
 sql_dict['Md_Index Constants Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
                         df.address src_address, 'MD_Index and Constants Match' description
                 from functions f,
-                     (select * from diff.functions where md_index != 0 group by md_index, constants, numbers having count(*) == 1) df
+                     (select * from diff.functions where md_index != 0 and constants_count > 0 group by md_index, constants having count(*) == 1) df
                 where f.md_index = df.md_index
-                and ((f.constants = df.constants and f.constants_count > 0)
-                or (f.numbers = df.numbers and f.numbers_count > 0))
-                and f.size = df.size
-                and f.instructions = df.instructions
+                and f.constants = df.constants
+                and f.numbers = df.numbers
                 and f.address not in (select bin_address from results)
-                group by src_func_id having count(src_func_id) = 1 
+                group by src_func_id having count(*) = 1 
         """
 sql_dict['KOKA Hash Constants Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
-                        df.address src_address, 'MD_Index and Constants Match' description
+                        df.address src_address, 'KOKA Hash and Constants Match' description
                 from functions f,
-                     (select * from diff.functions where kgh_hash != 0 group by kgh_hash, constants, numbers having count(*) == 1) df
+                     (select * from diff.functions where kgh_hash != 0 and constants_count > 0 group by kgh_hash, constants, numbers having count(*) == 1) df
                 where f.kgh_hash = df.kgh_hash
-                and ((f.constants = df.constants and f.constants_count > 0)
-                or (f.numbers = df.numbers and f.numbers_count > 0))
-                and f.size = df.size 
-                and f.instructions = df.instructions
+                and f.constants = df.constants
+                and f.numbers = df.numbers
                 and f.address not in (select bin_address from results)
-                group by f.address having count(f.address) = 1 
+                group by src_func_id having count(*) = 1
         """
 sql_dict['Bytes Hash Neighbor Match'] = """select distinct f.address bin_addr, f.name bin_name, df.id src_id, df.name src_name, df.address src_addr,
                     'Bytes Hash Neighbor Match' description, f.id bin_id
@@ -138,9 +139,6 @@ sql_dict['Numbers Neighbor Match'] = """
                     where f.numbers = df.numbers 
                     and f.numbers_count > 3
                     and f.address not in (select bin_address from results)
-"""
-sql_dict['Numbers Neighbor Match'] = """
-                    
 """
 sql_dict['Constants Neighbor Match'] = """
                     select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
@@ -228,6 +226,8 @@ class SqlOperate:
             primes_value text,
             comment text,
             mangled_function text,
+            name_hash text,
+            mangled_hash text,
             bytes_hash text,
             pseudocode text,
             pseudocode_lines integer,

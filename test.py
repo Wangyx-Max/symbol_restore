@@ -5,8 +5,8 @@ import time
 
 t0 = time.time()
 # sqlite_db = os.path.splitext(GetIdbPath())[0] + ".sqlite"
-sqlite_db = "C:\\Users\\Admin\\Downloads\\Magical Pairs Pair Matching Puzzle_v1.1.8.2_apkpure.com\\lib\\armeabi-v7a\\libMyGame.sqlite"
-sym_db = "C:\\Users\\Admin\\Desktop\\data7\\diff.sqlite"
+sqlite_db = "C:\\Users\\Admin\\Desktop\\sym_restore\\Sample2\\results.sqlite"
+sym_db = "C:\\Users\\Admin\\Desktop\\sym_restore\\Sample\\diff.sqlite"
 sql_op = SqlOperate(sqlite_db)
 rows = sql_op.read_results()
 s = 0
