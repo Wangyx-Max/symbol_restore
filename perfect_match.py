@@ -1070,7 +1070,7 @@ class FuzzyMatch(Match):
     def delete_results(self, sql_op):
         sql = """delete from results_fuzzy where id not in (
                     select id from results_fuzzy group by bin_address order by ratio desc)
-                    and ratio != 1.0
+                    and ratio < 1.0
             """
         self.cur.execute(sql)
         self.conn.commit()
