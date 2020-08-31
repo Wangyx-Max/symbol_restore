@@ -27,11 +27,12 @@ sql_dict['Same Name Match'] = """select distinct f.address ea, f.name bin_name, 
         where df.mangled_hash = f.mangled_hash
         """
 sql_dict['Rare Bytes Hash Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
-        df.address src_address, 'Bytes Hash Match' description
-                    from (select * from functions group by function_hash having count(function_hash) = 1) f,
+        df.address src_address, 'Rare Bytes Hash Match' description
+                    from (select * from functions group by bytes_hash having count(bytes_hash) = 1) f,
                     diff.functions df
-                    where f.function_hash = df.function_hash
+                    where f.bytes_hash = df.bytes_hash
                     and f.address not in (select bin_address from results)
+                    and df.address not in (select src_address from results)
                     group by ea having count(ea) = 1
             """
 sql_dict['Rare Mnemonics Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
@@ -43,83 +44,94 @@ sql_dict['Rare Mnemonics Match'] = """select distinct f.address ea, f.name bin_n
                     and f.numbers2 = df.numbers2
                     and f.instructions > 2
                     and f.address not in (select bin_address from results)
+                    and df.address not in (select src_address from results)
                     group by ea having count(ea) = 1
             """
-sql_dict['Rare Numbers Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
-                df.address src_address, 'Rare Numbers Match' description
-                    from (select * from functions where numbers_count > 10 or numbers2_count > 2 group by numbers, numbers2 having count(*) = 1) f,
-                    diff.functions df
-                    where f.numbers = df.numbers
-                    and f.numbers2 = df.numbers2
-                    and f.address not in (select bin_address from results)
-                    group by src_func_id having count(*) = 1
-"""
+
 sql_dict['Rare Constants Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
                 df.address src_address, 'Rare Constants Match' description
-                    from functions f,
-                    (select * from diff.functions where constants_count > 0 group by constants, numbers, numbers2 having count(*) = 1) df
+                    from diff.functions df,
+                    (select * from functions 
+                    where constants_count > 1 or numbers_count > 10 or numbers2_count > 2 
+                    group by constants, numbers, numbers2 having count(*) = 1) f
                     where f.constants = df.constants
                     and f.numbers = df.numbers
                     and f.numbers2 = df.numbers2
-                    and f.address not in (select bin_address from results) 
-                    group by src_func_id having count(*) = 1
+                    and f.address not in (select bin_address from results)
+                    and df.address not in (select src_address from results) 
+                    group by ea having count(ea) = 1
             """
 sql_dict['Mnemonics Constants Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
                 df.address src_address, 'Mnemonics and Constants Match' description
-                    from functions f,
-                        (select * from diff.functions where constants_count > 0 group by mnemonics, constants having count(*) = 1) df
+                    from diff.functions df,
+                        (select * from functions 
+                        where constants_count > 0 or numbers_count > 5 or numbers2_count > 0 
+                        group by mnemonics, constants, numbers, numbers2 having count(*) = 1) f
                     where f.mnemonics = df.mnemonics
                     and f.constants = df.constants
                     and f.numbers = df.numbers
                     and f.address not in (select bin_address from results)
-                    group by src_func_id having count(*) = 1  
+                    and df.address not in (select src_address from results)
+                    group by ea having count(ea) = 1
             """
+
 sql_dict['Rare Md_Index Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
                         df.address src_address, 'Rare MD Index Match' description
-                from functions f,
-                     (select * from diff.functions where md_index != 0 group by md_index having count(*) == 1) df
+                from diff.functions df,
+                     (select * from functions where md_index != 0 group by md_index having count(*) == 1) f
                 where f.md_index = df.md_index
                 and f.size = df.size 
                 and f.instructions = df.instructions
                 and f.address not in (select bin_address from results)
-                group by src_func_id having count(*) = 1 
+                and df.address not in (select src_address from results)
+                group by ea having count(ea) = 1 
         """
 sql_dict['Rare KOKA Hash Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
                         df.address src_address, 'Rare KOKA Hash Match' description
-           from functions f,
-                (select * from diff.functions where kgh_hash != 0 group by kgh_hash having count(*) == 1) df
+           from diff.functions df,
+                (select * from functions where kgh_hash != 0 group by kgh_hash having count(*) == 1) f
                 where f.kgh_hash = df.kgh_hash
                 and f.size = df.size 
                 and f.instructions = df.instructions
                 and f.numbers = df.numbers
                 and f.address not in (select bin_address from results)
-                group by src_func_id having count(*) = 1 
+                and df.address not in (select src_address from results)
+                group by ea having count(ea) = 1 
 """
 sql_dict['Md_Index Constants Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
                         df.address src_address, 'MD_Index and Constants Match' description
-                from functions f,
-                     (select * from diff.functions where md_index != 0 and constants_count > 0 group by md_index, constants having count(*) == 1) df
+                from diff.functions df,
+                     (select * from functions 
+                     where md_index != 0 and (constants_count > 0 or numbers_count > 5 or numbers2_count > 0) 
+                     group by md_index, constants, numbers, numbers2 having count(*) == 1) f
                 where f.md_index = df.md_index
                 and f.constants = df.constants
                 and f.numbers = df.numbers
+                and f.instructions = df.instructions
                 and f.address not in (select bin_address from results)
-                group by src_func_id having count(*) = 1 
+                and df.address not in (select src_address from results)
+                group by ea having count(ea) = 1
         """
 sql_dict['KOKA Hash Constants Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
                         df.address src_address, 'KOKA Hash and Constants Match' description
-                from functions f,
-                     (select * from diff.functions where kgh_hash != 0 and constants_count > 0 group by kgh_hash, constants, numbers having count(*) == 1) df
+                from diff.functions df,
+                     (select * from functions 
+                     where kgh_hash != 0 and (constants_count > 0 or numbers_count > 5 or numbers2_count > 0) 
+                     group by kgh_hash, constants, numbers, number2 having count(*) == 1) f
                 where f.kgh_hash = df.kgh_hash
                 and f.constants = df.constants
                 and f.numbers = df.numbers
                 and f.address not in (select bin_address from results)
-                group by src_func_id having count(*) = 1
+                and df.address not in (select src_address from results)
+                group by ea having count(ea) = 1
         """
+
 sql_dict['Bytes Hash Neighbor Match'] = """select distinct f.address bin_addr, f.name bin_name, df.id src_id, df.name src_name, df.address src_addr,
                     'Bytes Hash Neighbor Match' description, f.id bin_id
                     from functions f,
                         diff.functions df
-                    where f.function_hash = df.function_hash
+                    where f.bytes_hash = df.bytes_hash
+                    and f.instructions > 1
                     and f.address not in (select bin_address from results)
         """
 sql_dict['Mnemonics Neighbor Match'] = """
@@ -131,22 +143,15 @@ sql_dict['Mnemonics Neighbor Match'] = """
                     and f.instructions > 5
                     and f.address not in (select bin_address from results)
         """
-sql_dict['Numbers Neighbor Match'] = """
-                    select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
-                    'Numbers Neighbor Match' description, f.id bin_id
-                    from functions f,
-                        diff.functions df
-                    where f.numbers = df.numbers 
-                    and f.numbers_count > 3
-                    and f.address not in (select bin_address from results)
-"""
 sql_dict['Constants Neighbor Match'] = """
                     select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
                     'Constants Neighbor Match' description, f.id bin_id
                     from functions f,
-                        diff.functions df
+                        (select * from diff.functions 
+                        where constants_count > 0 or numbers_count > 5 or numbers2_count > 0) df
                     where f.constants = df.constants
-                    and f.constants_count > 0
+                    and f.numbers = df.numbers
+                    and f.numbers2 = df.numbers2
                     and f.address not in (select bin_address from results)
         """
 sql_dict['MD Index Neighbor Match'] = """
@@ -157,6 +162,8 @@ sql_dict['MD Index Neighbor Match'] = """
                     where f.md_index = df.md_index
                     and f.size = df.size
                     and f.instructions = df.instructions
+                    and f.numbers = df.numbers
+                    and f.numbers2 = df.numbers2
                     and f.address not in (select bin_address from results)
         """
 sql_dict['KOKA Hash Neighbor Match'] = """
@@ -165,10 +172,340 @@ sql_dict['KOKA Hash Neighbor Match'] = """
                     from (select * from functions where kgh_hash != 0) f,
                         (select * from diff.functions where kgh_hash != 0) df
                     where f.kgh_hash = df.kgh_hash
+                    and f.kgh_hash != 0
                     and f.size = df.size
                     and f.instructions = df.instructions
+                    and f.numbers = df.numbers
+                    and f.numbers2 = df.numbers2
                     and f.address not in (select bin_address from results)
         """
+sql_dict['Assembly Neighbor Match'] = """
+                    select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
+                    'Assembly Neighbor Match' description, f.id bin_id
+                    from (select * from functions where assembly != 0) f,
+                        (select * from diff.functions where assembly != 0) df
+                    where f.assembly = df.assembly
+                    and f.address not in (select bin_address from results)
+"""
+sql_dict['Clean Assembly Neighbor Match'] = """
+                    select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
+                    'Clean Assembly Neighbor Match' description, f.id bin_id
+                    from (select * from functions where clean_assembly != 0) f,
+                        (select * from diff.functions where clean_assembly != 0) df
+                    where f.clean_assembly = df.clean_assembly
+                    and f.address not in (select bin_address from results)
+"""
+sql_dict['Pseudocode Neighbor Match'] = """
+                    select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
+                    'Assembly Neighbor Match' description, f.id bin_id
+                    from (select * from functions where pseudocode != 0) f,
+                        (select * from diff.functions where pseudocode != 0) df
+                    where f.pseudocode = df.pseudocode
+                    and f.pseudocode_lines > 1
+                    and f.address not in (select bin_address from results)
+"""
+sql_dict['Clean Pseudocode Neighbor Match'] = """
+                    select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
+                    'Clean Assembly Neighbor Match' description, f.id bin_id
+                    from (select * from functions where clean_pseudo != 0) f,
+                        (select * from diff.functions where clean_pseudo != 0) df
+                    where f.clean_pseudo = df.clean_pseudo
+                    and f.pseudocode_lines > 1
+                    and f.address not in (select bin_address from results)
+"""
+
+sql_dict['Rare Pseudocode Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Rare Pseudocode Match' description
+                    from (select * from functions group by pseudocode having count(*) = 1) f,
+                    diff.functions df
+                    where f.pseudocode = df.pseudocode
+                    and f.address not in (select bin_address from results)
+                    group by ea having count(ea) = 1
+"""
+sql_dict['Rare Assembly Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Rare Assembly Match' description
+                    from (select * from functions group by assembly having count(*) = 1) f,
+                    diff.functions df
+                    where f.assembly = df.assembly
+                    and f.address not in (select bin_address from results)
+                    group by ea having count(ea) = 1
+"""
+sql_dict['Rare Clean Pseudocode Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Rare Clean Pseudocode Match' description
+                    from (select * from diff.functions group by clean_pseudo having count(*) = 1) f,
+                    functions df
+                    where f.clean_pseudo = df.clean_pseudo
+                    and f.address not in (select bin_address from results)
+                    group by ea having count(ea) = 1
+"""
+sql_dict['Rare Clean Assembly Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Rare Clean Assembly Match' description
+                    from (select * from functions group by clean_assembly having count(*) = 1) f,
+                    diff.functions df
+                    where f.clean_assembly = df.clean_assembly
+                    and f.address not in (select bin_address from results)
+                    group by ea having count(ea) = 1
+"""
+
+sql_dict['Rare Mnemonics Spp Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Rare Mnemonics Spp Match' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions group by mnemonics_spp having count(*) = 1) f,
+                    diff.functions df
+                    where f.mnemonics_spp = df.mnemonics_spp
+                    and f.address not in (select bin_address from results)
+                    group by ea having count(ea) = 1
+"""
+sql_dict['Rare Pseudocode Fuzzy Hash Match(Mixed)'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Rare Pseudocode Fuzzy Hash Match(Mixed)' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,      
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions group by pseudocode_hash1 having count(*) = 1) f,
+                    diff.functions df
+                    where f.pseudocode_hash1 = df.pseudocode_hash1
+                    and f.address not in (select bin_address from results)
+                    group by ea having count(ea) = 1
+"""
+sql_dict['Rare Pseudocode Fuzzy Hash Match(AST)'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Rare Pseudocode Fuzzy Hash Match(AST)' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions group by pseudocode_primes having count(*) = 1) f,
+                    diff.functions df
+                    where f.pseudocode_primes = df.pseudocode_primes
+                    and f.address not in (select bin_address from results)
+                    group by ea having count(ea) = 1
+"""
+sql_dict['Rare Pseudocode Fuzzy Hash Match(Normal)'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Rare Pseudocode Fuzzy Hash Match(Normal)' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions group by pseudocode_hash2 having count(*) = 1) f,
+                    diff.functions df
+                    where f.pseudocode_hash2 = df.pseudocode_hash2
+                    and f.address not in (select bin_address from results)
+                    group by ea having count(ea) = 1
+"""
+sql_dict['Rare Pseudocode Fuzzy Hash Match(Reverse)'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Rare Pseudocode Fuzzy Hash Match(Reverse)' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions group by pseudocode_hash2 having count(*) = 1) f,
+                    diff.functions df
+                    where f.pseudocode_hash3 = df.pseudocode_hash3
+                    and f.address not in (select bin_address from results)
+                    group by ea having count(ea) = 1
+"""
+
+sql_dict['Supplement Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Supplement Match' description
+                    from (select * from functions 
+                            where address not in (select bin_address from results
+                                            union select bin_address from results_multi)
+                            group by address having count(*) = 1) f,
+                        (select * from diff.functions 
+                            where address not in (select bin_address from results 
+                                            union select bin_address from results_multi)) df
+                    where f.bytes_hash = df.bytes_hash
+                    group by f.address having count(*) = 1
+"""
+sql_dict['Linker Optimization Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Linker Optimization Match' description
+                    from (select * from functions 
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi)
+                         group by bytes_hash having count(bytes_hash) = 1) f,
+                    (select * from diff.functions
+                    where address not in (select src_address from results
+                                    union select src_address from results_multi)) df
+                    where f.bytes_hash = df.bytes_hash
+"""
+sql_dict['Same Bytes Hash Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Same Bytes Hash Match' description
+                    from (select * from functions 
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi)) f,
+                    (select * from diff.functions
+                    where address not in (select src_address from results
+                                    union select src_address from results_multi)) df
+                    where f.bytes_hash = df.bytes_hash
+"""
+
+sql_dict['Mnemonics Score Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Same Mnemonics Match' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions 
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi
+                                        union select bin_address from results_fuzzy)) f,
+                    (select * from diff.functions
+                    where address not in (select src_address from results
+                                    union select src_address from results_multi
+                                        union select src_address from results_fuzzy)) df
+                    where f.mnemonics = df.mnemonics
+                    and f.numbers = df.numbers
+                    and f.numbers2 = df.numbers2
+"""
+sql_dict['Constants Score Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Constants Score Match' description, 
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions 
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi
+                                        union select bin_address from results_fuzzy)) f, 
+                        (select * from diff.functions
+                         where address not in (select src_address from results
+                                        union select src_address from results_multi
+                                        union select src_address from results_fuzzy)) df
+                    where f.constants = df.constants
+                    and f.numbers = df.numbers
+                    and f.numbers2 = df.numbers2
+"""
+sql_dict['MD Index Score Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'MD Index Score Match' description, 
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions 
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi
+                                        union select bin_address from results_fuzzy)) f, 
+                        (select * from diff.functions
+                         where address not in (select src_address from results
+                                        union select src_address from results_multi
+                                        union select src_address from results_fuzzy)) df
+                    where f.md_index = df.md_index
+                    and f.md_index != 0
+"""
+sql_dict['KOKA Hash Score Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'KOKA Hash Score Match' description, 
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions 
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi
+                                        union select bin_address from results_fuzzy)) f, 
+                        (select * from diff.functions
+                         where address not in (select src_address from results
+                                        union select src_address from results_multi
+                                        union select src_address from results_fuzzy)) df
+                    where f.kgh_hash = df.kgh_hash
+                    and f.kgh_hash != 0
+"""
+
+sql_dict['Mnemonics Spp Match'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
+        df.address src_address, 'Assembly Spp Match' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions 
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi
+                                        union select bin_address from results_fuzzy)) f,
+                        (select * from diff.functions
+                        where address not in (select src_address from results
+                                        union select src_address from results_multi
+                                        union select src_address from results_fuzzy)) df
+                    where f.mnemonics_spp = df.mnemonics_spp
+"""
+sql_dict['Pseudocode Fuzzy Hash Match(Mixed)'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
+        df.address src_address, 'Pseudocode Fuzzy Hash Match(Mixed)' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions 
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi
+                                        union select bin_address from results_fuzzy)) f,
+                        (select * from diff.functions
+                        where address not in (select src_address from results
+                                        union select src_address from results_multi
+                                        union select src_address from results_fuzzy)) df
+                    where f.pseudocode_hash1 = df.pseudocode_hash1
+"""
+sql_dict['Pseudocode Fuzzy Hash Match(AST)'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
+        df.address src_address, 'Pseudocode Fuzzy Hash Match(AST)' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions 
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi
+                                        union select bin_address from results_fuzzy)) f,
+                        (select * from diff.functions
+                         where address not in (select src_address from results
+                                        union select src_address from results_multi
+                                        union select src_address from results_fuzzy)) df
+                    where f.pseudocode_primes = df.pseudocode_primes
+"""
+sql_dict['Pseudocode Fuzzy Hash Match(Normal)'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
+        df.address src_address, 'Pseudocode Fuzzy Hash Match(Normal)' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions 
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi
+                                        union select bin_address from results_fuzzy)) f,
+                        (select * from diff.functions
+                         where address not in (select src_address from results
+                                        union select src_address from results_multi
+                                        union select src_address from results_fuzzy)) df
+                    where f.pseudocode_hash2 = df.pseudocode_hash2
+"""
+sql_dict['Pseudocode Fuzzy Hash Match(Reverse)'] = """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
+        df.address src_address, 'Pseudocode Fuzzy Hash Match(Reverse)' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions 
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi
+                                        union select bin_address from results_fuzzy)) f,
+                        (select * from diff.functions
+                         where address not in (select src_address from results
+                                        union select src_address from results_multi
+                                        union select src_address from results_fuzzy)) df
+                    where f.pseudocode_hash3 = df.pseudocode_hash3
+"""
+
+
+def create_sql_props(l):
+    props = []
+    for prop in l:
+        if type(prop) is long and (prop > 0xFFFFFFFF or prop < -0xFFFFFFFF):
+            prop = str(prop)
+        if type(prop) is list or type(prop) is set:
+            props.append(json.dumps(list(prop), ensure_ascii=False))
+        else:
+            props.append(prop)
+    return props
+
 
 class SqlOperate:
     def __init__(self, name):
@@ -195,12 +532,12 @@ class SqlOperate:
     def create_results(self):
         self.connect()
         sql = """create table if not exists results (
-            bin_address text,
-            bin_name varchar(255), 
-            src_address text unique,
-            src_name varchar(255), 
-            description varchar(255),
-            primary key(src_name))"""
+                    bin_address integer unique,
+                    bin_name varchar(255), 
+                    src_address integer unique,
+                    src_name varchar(255), 
+                    description varchar(255),
+                    primary key(src_name))"""
         try:
             self.cur.execute(sql)
             self.conn.commit()
@@ -209,51 +546,79 @@ class SqlOperate:
         finally:
             self.cur.close()
 
+    def create_results_multi(self):
+        self.connect()
+        sql = """create table if not exists results_multi (
+                    bin_address integer,
+                    bin_name varchar(255), 
+                    src_address integer,
+                    src_name varchar(255), 
+                    description varchar(255),
+                    primary key(bin_address, src_address))"""
+        try:
+            self.cur.execute(sql)
+            self.conn.commit()
+        except:
+            print("create results_multi error")
+        finally:
+            self.cur.close()
+
+    def create_results_fuzzy(self):
+        self.connect()
+        sql = """create table if not exists results_fuzzy (
+                    id integer primary key,
+                    bin_address integer,
+                    bin_name varchar(255), 
+                    src_address integer,
+                    src_name varchar(255), 
+                    ratio real,
+                    description varchar(255))"""
+        try:
+            self.cur.execute(sql)
+            self.conn.commit()
+        except:
+            print("create results_fuzzy error")
+
     def create_functions(self):
         self.connect()
         sql = """ create table if not exists functions (
             id integer primary key,
-            name varchar(255),
             address integer unique,
-            nodes integer,
-            edges integer,
-            size integer,
-            instructions integer,
-            mnemonics text,
-            names text,
-            prototype text,
-            cyclomatic_complexity integer,
-            primes_value text,
-            comment text,
+            name varchar(255),
             mangled_function text,
             name_hash text,
             mangled_hash text,
-            bytes_hash text,
-            pseudocode text,
-            pseudocode_lines integer,
-            pseudocode_hash1 text,
-            pseudocode_primes text,
             function_flags integer,
-            assembly text,
-            prototype2 text,
-            pseudocode_hash2 text,
-            pseudocode_hash3 text,
-            tarjan_topological_sort text,
-            clean_assembly text,
-            clean_pseudo text,
-            mnemonics_spp text,
-            function_hash text,
-            md_index text,
-            constants text,
-            constants_count integer,
+            size integer,
+            instructions integer,
+            bytes_hash text,
+            mnemonics text,
             numbers text,
             numbers_count integer,
             numbers2 text,
             numbers2_count integer,
-            assembly_addrs text,
-            kgh_hash text,
+            
             callers text,
-            callers_count integer) """
+            callers_count integer,
+            
+            constants text,
+            constants_count integer,
+            
+            md_index text,
+            kgh_hash text,
+            nodes integer,
+            
+            assembly text,
+            clean_assembly text,
+            pseudocode text,
+            clean_pseudo text,
+            pseudocode_lines integer,
+            mnemonics_spp text,
+            pseudocode_primes text,
+            pseudocode_hash1 text,
+            pseudocode_hash2 text,
+            pseudocode_hash3 text
+            ) """
         try:
             self.cur.execute(sql)
             self.conn.commit()
@@ -315,22 +680,71 @@ class SqlOperate:
     def read_results(self):
         self.connect()
         sql = """select * from results"""
-        self.cur.execute(sql)
-        res = self.cur.fetchall()
-        self.cur.close()
+        try:
+            self.cur.execute(sql)
+            res = self.cur.fetchall()
+        except:
+            res = []
+        finally:
+            self.cur.close()
         return res
 
-    def read_results_des(self):
+    def read_results_multi(self, t=''):
         self.connect()
-        sql = """select count(*),description from results group by description
-                union
-                select count(*), 'total' description from results
-                order by count(*) desc
-        """
+        if t == '':
+            sql = """select * from results_multi"""
+        elif t == 'show':
+            sql = """select * from results_multi group by bin_address"""
+        try:
+            self.cur.execute(sql)
+            res = self.cur.fetchall()
+        except:
+            res = []
+        finally:
+            self.cur.close()
+        return res
+
+    def read_results_fuzzy(self, des=None):
+        self.connect()
+        try:
+            if des is None:
+                sql = """select * from results_fuzzy"""
+                self.cur.execute(sql)
+                res = self.cur.fetchall()
+            else:
+                sql = """select * from results_fuzzy where description like '% Score Match'"""
+                self.cur.execute(sql)
+                res = self.cur.fetchall()
+        except:
+            res = []
+        finally:
+            self.cur.close()
+        return res
+
+    def read_results_instr(self, src_name):
+        self.attach(src_name)
+        sql = """select * from results
+                    """
         self.cur.execute(sql)
+        sql_bin = """select instructions, numbers, numbers2 from functions where address = %s 
+                """
+        sql_src = """select instructions, numbers, numbers2 from diff.functions where address = %s 
+                """
+
         rows = self.cur.fetchall()
-        self.cur.close()
-        return rows
+        res = []
+        sum = 0
+        s = 0
+        for row in rows:
+            sum += 1
+            self.cur.execute(sql_bin % (row[0]))
+            bin = self.cur.fetchone()
+            self.cur.execute(sql_src % (row[2]))
+            src = self.cur.fetchone()
+            if bin and src and str(bin[0]) != str(src[0]):
+                res.append((row, bin[0], src[0], bin[1], src[1], bin[2], src[2]))
+                s += 1
+        return res
 
     def read_constants(self, name=None):
         if name is None:
@@ -363,51 +777,94 @@ class SqlOperate:
             self.cur.close()
         return dict
 
-    def read_results_des(self, des, output=False):
+    def read_results_des(self, dess, output=False):
         self.connect()
-        sql = """select * from results where description == %s
-        """
-        self.cur.execute(sql % des)
-        rows = self.cur.fetchall()
-        if output is True:
-            sum = 0
-            for row in rows:
-                print row[0] + '->' + row[2]
-                sum += 1
-            print sum
+        for des in dess:
+            sql = """select * from results where description == '%s'
+            """
+            self.cur.execute(sql % des)
+            rows = self.cur.fetchall()
+            try:
+                res += rows
+            except:
+                res = rows
+            if output is True:
+                sum = 0
+                for row in rows:
+                    print str(row[0]) + '->' + str(row[2])
+                    sum += 1
+                print sum
         self.cur.close()
-        return rows
+        # print res
+        return res
 
     def read_results_test(self, src_name, attr, des=None):
         self.attach(src_name)
         if des is None:
-            sql = """select src_address, bin_address, description from results
+            sql = """select * from results
             """
             self.cur.execute(sql)
         else:
-            sql = """select src_address, bin_address, description from results where description == %s
+            sql = """select * from results where description == %s
             """
             self.cur.execute(sql % des)
-        sql_bin = """select %s, instructions from functions where address = %s 
+        sql_bin = """select %s from functions where address = %s 
         """
-        sql_src = """select %s, instructions from diff.functions where address = %s 
+        sql_src = """select %s from diff.functions where address = %s 
         """
 
         rows = self.cur.fetchall()
+        res = []
+        sum = 0
+        s = 0
+        for row in rows:
+            sum += 1
+            self.cur.execute(sql_bin % (attr, row[0]))
+            bin = self.cur.fetchone()
+            self.cur.execute(sql_src % (attr, row[2]))
+            src = self.cur.fetchone()
+            if bin and src and str(bin[0]) != str(src[0]):
+                if des is None:
+                    print row[4]
+                print str(row[0]) + '->' + str(row[2])
+                res.append(row)
+                s += 1
+        print sum, s
+        return res
+
+    def read_results_fuzzy_test(self, src_name, attr, des=None):
+        self.attach(src_name)
+        if des is None:
+            sql = """select * from results_fuzzy
+            """
+            self.cur.execute(sql)
+        else:
+            sql = """select * from results_fuzzy where description == %s
+            """
+            self.cur.execute(sql % des)
+        sql_bin = """select %s from functions where address = %s 
+        """
+        sql_src = """select %s from diff.functions where address = %s 
+        """
+
+        rows = self.cur.fetchall()
+        res = []
         sum = 0
         s = 0
         for row in rows:
             sum += 1
             self.cur.execute(sql_bin % (attr, row[1]))
             bin = self.cur.fetchone()
-            self.cur.execute(sql_src % (attr, row[0]))
+            self.cur.execute(sql_src % (attr, row[3]))
             src = self.cur.fetchone()
-            if bin and src and str(bin[0]) != str(src[0]) and int(bin[1]) == int(src[1]):
+            if bin and src and str(bin[0]) != str(src[0]):
                 if des is None:
-                    print row[2]
-                print row[1] + '->' + row[0]
+                    print row[6]
+                print str(row[2]) + '->' + str(row[4])
+                res.append(row)
                 s += 1
         print sum, s
+        return res
 
     def test_sql_dict(self, name, key, output=False):
         self.attach(name)

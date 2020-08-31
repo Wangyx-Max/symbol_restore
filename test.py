@@ -1,13 +1,64 @@
-# from idc import *
-# from perfect_match import PerfectMatch
-from sql_opt import *
+from show import *
+from perfect_match import *
 import time
 
+
+t0 = time.time()
+sqlite_db = "C:\\Users\\Admin\\Desktop\\data8\\libcpp_tests_noSymbol.sqlite"
+sym_db = "C:\\Users\\Admin\\Desktop\\data8\\diff.sqlite"
+
+
+fm = FuzzyMatch(sqlite_db, sym_db)
+fm.do_fuzzy_match()
+show_all_results(sqlite_db, sym_db, 'Fuzzy Match')
+
+"""
+t0 = time.time()
+sqlite_db = "C:\\sym_restore\\Sample\\noSymbol_tests.sqlite"
+sym_db = "C:\\sym_restore\\Sample\\diff.sqlite"
+mm = MultipleMatch(sqlite_db, sym_db)
+mm.do_multiple_match()
+"""
+"""
+t0 = time.time()
+sqlite_db = "C:\\sym_restore\\Sample\\noSymbol_tests.sqlite"
+sym_db = "C:\\sym_restore\\Sample\\diff.sqlite"
+fm = FuzzyMatch(sqlite_db, sym_db)
+fm.do_fuzzy_match()
+"""
+"""
+sql_op = SqlOperate(sqlite_db)
+pm = PerfectMatch(sqlite_db, sym_db)
+while True:
+    if pm.neighbor_match() == 0:
+        break
+mm = MultipleMatch(sqlite_db, sym_db)
+mm.do_multiple_match()"""
+
+"""rows = sql_op.read_results_fuzzy(sym_db, 'md_index')
+# rows = sql_op.read_results_multi()
+c = PerfectChoose('test', sqlite_db, sym_db, rows)
+c.show()"""
+
+"""
 t0 = time.time()
 # sqlite_db = os.path.splitext(GetIdbPath())[0] + ".sqlite"
-sqlite_db = "C:\\Users\\Admin\\Desktop\\sym_restore\\Sample2\\results.sqlite"
+sqlite_db = "C:\\Users\\Admin\\Desktop\\sym_restore\\Sample\\noSymbol_tests.sqlite"
 sym_db = "C:\\Users\\Admin\\Desktop\\sym_restore\\Sample\\diff.sqlite"
 sql_op = SqlOperate(sqlite_db)
+conn, cur = sql_op.attach(sym_db)
+sql = "select * from(
+select f.address ,r.src_address, '  matched' state, r.description, f.name from functions f, results r where f.address in (select bin_address from results) and f.address = r.bin_address
+union
+select address ,'0000000', 'unmatched','unmatched', name from functions where address not in (select bin_address from results)
+)  order by address
+"
+cur.execute(sql)
+rows = cur.fetchall()
+for row in rows:
+    print str(row[0]) + ' (' + str(row[4]) + ') ->' + str(row[1]) + ' ' + row[2] + ' ' + row[3]
+# sql_op.read_results_test(sym_db, 'instructions', "\'Constants Neighbor Match Test\'")"""
+"""
 rows = sql_op.read_results()
 s = 0
 print len(rows)
@@ -16,7 +67,7 @@ for row in rows:
         print row[0] + '->' + row[2] + ' ' + row[4]
         s += 1
 print s
-
+"""
 
 """
 rows = sql_op.read_results_des("\'Mnemonics and Constants Match\'")
