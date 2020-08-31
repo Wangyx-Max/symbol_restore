@@ -343,7 +343,5 @@ def make_score(row, cur):
     v8 = compare_callee(str(row[4]), str(row[0]), cur)
 
     print r, v5, v6, v7, v8
-    if r + v5/100 + v6/100 + v7/100 + v8/10 >= 1.0:
-        return 1.0
-    else:
-        return r + v5/100 + v6/100 + v7/100 + v8/10
+
+    return r + v5/100 + v6/100 + v7/100 + v8/10
