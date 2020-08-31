@@ -139,7 +139,7 @@ class CodeClean:
         if cpu_struct == 'ARM' or cpu_struct == 'ARMB':
             thumb_end_list = ['EQ', 'NE', 'CS', 'HS', 'CC', 'LO', 'MI', 'PL', 'VS',
                               'VC', 'HI', 'LS', 'GE', 'LT', 'GT', 'LE', 'AL']
-            bits_end_list = ['W', 'L', 'B', 'H']
+            bits_end_list = ['W', 'L', 'B', 'H', 'S']
         else:
             thumb_end_list = []
             bits_end_list = []
