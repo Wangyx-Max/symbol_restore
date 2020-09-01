@@ -1,7 +1,6 @@
-import sqlite3
-from sql_opt import SqlOperate
+from test.sql_opt import SqlOperate
 import time
-import json
+
 
 class NeighborMatch:
     def __init__(self, bin_name, src_name):

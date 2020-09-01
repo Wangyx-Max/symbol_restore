@@ -2,10 +2,9 @@ from idc import *
 from idaapi import *
 from idautils import *
 
-import sqlite3
 import json
 
-from sql_opt import SqlOperate
+from test.sql_opt import SqlOperate
 
 
 class StrMatch(object):

@@ -1,4 +1,4 @@
-from sql_opt import SqlOperate
+from test.sql_opt import SqlOperate
 
 bin_name = "C:\\Users\\Admin\\Desktop\\data4\\string_match.sqlite"
 src_name = "C:\\Users\\Admin\\Desktop\\data4\\symbol_string_match.sqlite"

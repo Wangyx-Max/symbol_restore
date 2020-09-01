@@ -1,4 +1,4 @@
-from score import *
+from test.score import *
 from sql_opt import *
 
 

@@ -327,6 +327,12 @@ def check_ratio(pseudo1, pseudo2, asm1, asm2, ast1, ast2, md1, md2):
 
 
 def make_score(row, cur):
+    """
+    calculate the matched ratio
+    @param row : functions information to be matched
+        cur : sql operator
+    @return matched ratio
+    """
     r = check_ratio(str(row[8]), str(row[9]),
                     str(row[6]), str(row[7]),
                     str(row[10]), str(row[11]),

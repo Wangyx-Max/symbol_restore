@@ -1,3 +1,7 @@
+"""
+interactive program
+open this file in IDA Pro
+"""
 from perfect_match import *
 from show import *
 
@@ -112,7 +116,7 @@ SQLite databases:
                 if f.rMultiMatch.checked is True:
                     mm = MultipleMatch(f.iFileSave.value, f.iFileOpen.value)
                     mm.do_multiple_match()
-                if f.rFuzzyMatch.checked is True:
+                if f.rFuzzyMatch.checked is True and f.rSlowMatch.checked is True:
                     fm = FuzzyMatch(f.iFileSave.value, f.iFileOpen.value)
                     fm.do_fuzzy_match()
                 time_elapsed = time.time() - t0

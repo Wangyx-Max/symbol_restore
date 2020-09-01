@@ -2,11 +2,10 @@ from idautils import *
 from idc import *
 from idaapi import *
 
-import json
 from hashlib import md5
 
-from sql_opt import *
-from cfg_hash import CFGHash
+from test.sql_opt import *
+from test.cfg_hash import CFGHash
 
 f = open('results.txt' ,'w')
 

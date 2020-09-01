@@ -6,10 +6,7 @@ import idaapi
 from hashlib import md5
 from difflib import SequenceMatcher
 
-from sql_opt import *
-from cfg_hash import CFGHash
-from code_clean import CodeClean, primesblow
-from score import check_ratio
+from utils import *
 
 
 def do_decompile(f):
@@ -47,6 +44,12 @@ def constant_filter(value):
 
 
 def read_function(f):
+    """
+    @param f: the start address of a function
+    @return l:
+        name, mangled_function, name_hash, mangled_hash, address, function_flags, size,
+        instructions, bytes_hash, mnemonics, numbers, numbers_count, numbers2, numbers2_count
+    """
     if func_check(f) is False:
         return False
 
@@ -101,17 +104,26 @@ def read_function(f):
 
 
 def read_cfg_hash(f):
+    """
+    @param f: the start address of a function
+    @return l:
+        md_index, kgh_hash, nodes, address
+    """
     if func_check(f) is False:
         return False
 
-    cfg_hash = CFGHash()
-    kgh_hash, md_index, nodes = cfg_hash.md_index(f)
+    kgh_hash, md_index, nodes = cfg_hash(f)
 
     l = (md_index, kgh_hash, nodes, f)
     return l
 
 
 def read_constants(f):
+    """
+    @param f: the start address of a function
+    @return l:
+        constants, constants_count, address
+    """
     if func_check(f) is False:
         return False
 
@@ -134,6 +146,11 @@ def read_constants(f):
 
 
 def read_callers(f):
+    """
+    @param f: the start address of a function
+    @return l:
+        callers, callers_count, address
+    """
     if func_check(f) is False:
         return False
 
@@ -153,6 +170,11 @@ def read_callers(f):
 
 
 def read_code_show(f):
+    """
+    @param f: the start address of a function
+    @return l:
+        assembly, pseudocode, pseudocode_lines, address
+    """
     if func_check(f) is False:
         return False
     func = get_func(f)
@@ -181,6 +203,12 @@ def read_code_show(f):
 
 
 def read_code(f):
+    """
+    @param f: the start address of a function
+    @return l:
+        assembly, clean_assembly, pseudocode, clean_pseudo, pseudocode_lines,
+        mnemonics_spp, pseudocode_primes, pseudo_hash1, pseudo_hash2, pseudo_hash3, address
+    """
     if func_check(f) is False:
         return False
     func = get_func(f)
@@ -441,6 +469,12 @@ class AnalyseFunction:
 
 class Match:
     def __init__(self, bin_name, src_name):
+        """
+        define member variables
+        @param
+            bin_name: the name of no symbol program
+            src_name: the name of symbol program
+        """
         self.bin_name = bin_name
         self.src_name = src_name
         self.conn = False
@@ -452,7 +486,8 @@ class Match:
 
     def do_insert_results(self, l, rename='results'):
         """
-        @ param l : bin_address, bin_name, src_address, src_name, description
+        @ param l : recording of a result
+            rename : name of inserted table
         """
         props = create_sql_props(l)
         if rename == 'results' or rename.endswith('code_hash'):
@@ -478,6 +513,11 @@ class Match:
             return 0
 
     def insert_results(self, sql, rename='results'):
+        """
+        get matched functions and insert into tables
+        @param sql : match functions sql
+            rename : name of inserted table
+        """
         self.cur.execute(sql)
         rows = self.cur.fetchall()
         res = 0
@@ -499,6 +539,9 @@ class Match:
         return res
 
     def update_match_results(self):
+        """
+        update variable functions and src_matched
+        """
         sql_op = SqlOperate(self.bin_name)
         rows = sql_op.read_results()
         sum = 0
@@ -966,6 +1009,11 @@ class PerfectMatch(Match):
             self.call_match()
 
     def do_perfect_match(self, module='match'):
+        """
+        do perfect match
+        include Basic Features Match, Function Call Match, Constants Match, CFG Hash Match, Neighbor Match
+        @param module : match module
+        """
         if module.startswith('match'):
             self.af.save_functions(self.functions)
             self.af.save_callers(self.functions)
@@ -984,6 +1032,10 @@ class PerfectMatch(Match):
         self.neighbor_match()
 
     def do_slow_match(self, module='match'):
+        """
+        do slow match
+        @param module : match module
+        """
         self.update_match_results()
         if module.startswith('match'):
             self.af.update_code(self.functions)
@@ -1045,7 +1097,7 @@ class MultipleMatch(Match):
         sql_op = SqlOperate(self.bin_name)
         self.conn, self.cur = sql_op.attach(self.src_name)
         rules_name = ['Supplement Match', 'Linker Optimization Match',
-                      'Same Bytes Hash Match', 'Same Mnemonics Match']
+                      'Same Bytes Hash Match']
         res = 0
         for rules in rules_name:
             sql = sql_dict[rules]
@@ -1057,6 +1109,10 @@ class MultipleMatch(Match):
         print("Linker Optimization Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
 
     def do_multiple_match(self):
+        """
+        do multiple match
+        include Swallow Match and Bytes Hash Match
+        """
         self.swallow_match()
         self.linker_optimization_match()
 
@@ -1104,4 +1160,7 @@ class FuzzyMatch(Match):
         print("Score Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
 
     def do_fuzzy_match(self):
+        """
+        do score match
+        """
         self.score_match()

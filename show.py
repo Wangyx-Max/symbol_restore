@@ -1,12 +1,9 @@
-from sql_opt import *
+from test.sql_opt import *
 from idc import *
 from idautils import *
 from idaapi import *
 import idaapi
-import ida_graph
 import ida_kernwin
-import ida_moves
-
 
 try:
     if idaapi.IDA_SDK_VERSION < 690:
