@@ -2,6 +2,7 @@ import base64
 import decimal
 import json
 import random
+import sqlite3
 import sys
 from difflib import SequenceMatcher
 from itertools import imap

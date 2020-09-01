@@ -1,3 +1,4 @@
+import adap_utils
 from idautils import *
 from idc import *
 from idaapi import *
@@ -6,7 +7,7 @@ import idaapi
 from hashlib import md5
 from difflib import SequenceMatcher
 
-from utils import *
+from adap_utils import *
 
 
 def do_decompile(f):
@@ -216,7 +217,7 @@ def read_code(f):
     cc = CodeClean()
     pseudocode_lines = 0
     cpu_ins_list = GetInstructionList()
-    primes = primesblow(2048 * 2048)
+    primes = primesbelow(2048 * 2048)
     cpu_ins_list.sort()
     mnemonics_spp = 1
     for x in list(Heads(func.startEA, func.endEA)):

@@ -2,8 +2,8 @@
 interactive program
 open this file in IDA Pro
 """
-from perfect_match import *
-from show import *
+from adap_match import *
+from adap_show import *
 
 
 class busy_form_t(ida_kernwin.Form):

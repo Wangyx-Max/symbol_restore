@@ -1,4 +1,4 @@
-from show import *
+from adap_show import *
 from perfect_match import *
 import time
 
