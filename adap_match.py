@@ -1,13 +1,7 @@
-import adap_utils
-from idautils import *
-from idc import *
-from idaapi import *
-import idaapi
-
 from hashlib import md5
-from difflib import SequenceMatcher
 
 from adap_utils import *
+from adap_sql import *
 
 
 def do_decompile(f):
@@ -217,7 +211,7 @@ def read_code(f):
     cc = CodeClean()
     pseudocode_lines = 0
     cpu_ins_list = GetInstructionList()
-    primes = primesbelow(2048 * 2048)
+    primes = primesblow(2048 * 2048)
     cpu_ins_list.sort()
     mnemonics_spp = 1
     for x in list(Heads(func.startEA, func.endEA)):
@@ -244,9 +238,8 @@ def read_code(f):
         pseudo = ""
         print("Function %d can\'t be decompiled" % f)
     pseudo_clean = cc.get_cmp_pseudo_lines(pseudo)
-    ch = CodeClean()
     (pseudocode_primes, pseudo_hash1, pseudo_hash2, pseudo_hash3) \
-        = ch.get_code_hash(f, pseudo)
+        = get_code_hash(f, pseudo)
     l = (asm, asm_clean, pseudo, pseudo_clean, pseudocode_lines,
          mnemonics_spp, pseudocode_primes, pseudo_hash1, pseudo_hash2, pseudo_hash3, f)
     return l
@@ -261,107 +254,6 @@ class AnalyseFunction:
         self.conn = False
         self.cur = False
 
-    def do_insert_function(self, l):
-        """
-        @ param l : name, true_name, name_hash, mangled_hash, f, flags, size, instructions,
-        bytes_hash, mnems, nums, nums_count, nums2, nums2_count
-        """
-        props = create_sql_props(l)
-        sql = """insert or ignore into functions (name, mangled_function, name_hash, mangled_hash, address, function_flags, size, instructions,
-                    bytes_hash, mnemonics, numbers, numbers_count, numbers2, numbers2_count)
-            values (?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?)
-        """
-        self.cur.execute(sql, props)
-        self.conn.commit()
-
-    def do_update_cfg_hash(self, l):
-        """
-        @ param l : md_index, kgh_hash, nodes, f
-        """
-        props = create_sql_props(l)
-        sql = """update or ignore functions set md_index = ?, kgh_hash = ?, nodes = ?
-            where address = ?
-            """
-        self.cur.execute(sql, props)
-        self.conn.commit()
-
-    def do_insert_constants(self, l):
-        """
-        @ param l: constants, constants_count, f
-        """
-        props = create_sql_props(l)
-        (constants, constants_count, f) = l
-        sql = """update or ignore functions set constants = ?, constants_count = ? 
-            where address = ?
-        """
-        self.cur.execute(sql, props)
-        self.conn.commit()
-        sql = "select id from functions where address = %d"
-        # print f
-        self.cur.execute(sql % int(f))
-        func_id = self.cur.fetchone()
-        if func_id is None:
-            return
-        func_id = func_id[0]
-        sql = "insert or ignore into constants (func_id, constant) values (?, ?)"
-        for constant in constants:
-            if type(constant) is str and len(constant) > 5:
-                self.cur.execute(sql, (func_id, constant))
-                self.conn.commit()
-
-    def do_insert_callers(self, l):
-        """
-        @param l: callers, callers_count, f
-        """
-        (callers, callers_count, f) = l
-        sql = """select id from functions where address = %s
-        """
-        sql_insert = """insert or ignore into callers (caller_id, caller_address, call_address, callee_address)
-        values (?, ?, ?, ?)
-        """
-        new_callers = []
-        for caller in callers:
-            caller_func = get_func(int(caller)).startEA
-            self.cur.execute(sql % str(caller_func))
-            caller_id = self.cur.fetchone()
-            if caller_id is None:
-                continue
-            self.cur.execute(sql_insert, (str(caller_id[0]), str(caller_func), str(caller), str(f)))
-            self.conn.commit()
-            new_callers.append(caller_func)
-        props = create_sql_props((new_callers, len(new_callers), f))
-        sql = """update or ignore functions set callers = ?, callers_count = ?
-                where address = ?
-        """
-        self.cur.execute(sql, props)
-        self.conn.commit()
-
-    def do_update_code(self, l):
-        """
-        @param l: assembly, clean_assembly, pseudocode, clean_pseudo, pseudocode_lines,
-         mnemonics_spp, pseudocode_primes, pseudocode_hash1, pseudocode_hash2, pseudocode_hash3, f
-        """
-        props = create_sql_props(l)
-        sql = """update or ignore functions 
-        set assembly = ?, clean_assembly = ?, pseudocode = ?, clean_pseudo = ?, pseudocode_lines = ?,
-        mnemonics_spp = ?, pseudocode_primes = ?, pseudocode_hash1 = ?, pseudocode_hash2 = ?, pseudocode_hash3 = ?
-        where address = ?
-        """
-        self.cur.execute(sql, props)
-        self.conn.commit()
-
-    def do_update_code_show(self, l):
-        """
-        @param l: assembly, pseudocode, f
-        """
-        props = create_sql_props(l)
-        sql = """update or ignore functions
-        set assembly = ?, pseudocode = ? where address = ?
-        """
-        self.cur.execute(sql, props)
-        self.conn.commit()
-
     def save_functions(self, functions):
         t0 = time.time()
         sql_op = SqlOperate(self.name)
@@ -371,7 +263,7 @@ class AnalyseFunction:
             l = read_function(func)
             if l is False:
                 continue
-            self.do_insert_function(l)
+            sql_op.do_insert_function(l)
         self.cur.close()
         self.conn.close()
         time_elapsed = time.time() - t0
@@ -387,7 +279,7 @@ class AnalyseFunction:
             l = read_constants(func)
             if l is False:
                 continue
-            self.do_insert_constants(l)
+            sql_op.do_insert_constants(l)
         self.cur.close()
         self.conn.close()
         time_elapsed = time.time() - t0
@@ -403,7 +295,7 @@ class AnalyseFunction:
             l = read_cfg_hash(func)
             if l is False:
                 continue
-            self.do_update_cfg_hash(l)
+            sql_op.do_update_cfg_hash(l)
         self.cur.close()
         self.conn.close()
         time_elapsed = time.time() - t0
@@ -419,7 +311,7 @@ class AnalyseFunction:
             l = read_callers(func)
             if l is False:
                 continue
-            self.do_insert_callers(l)
+            sql_op.do_insert_callers(l)
         self.cur.close()
         self.conn.close()
         time_elapsed = time.time() - t0
@@ -433,7 +325,7 @@ class AnalyseFunction:
             l = read_code(func)
             if l is False:
                 continue
-            self.do_update_code(l)
+            sql_op.do_update_code(l)
         self.cur.close()
         self.conn.close()
         time_elapsed = time.time() - t0
@@ -447,7 +339,7 @@ class AnalyseFunction:
             l = read_code_show(func)
             if l is False:
                 continue
-            self.do_update_code_show(l)
+            sql_op.do_update_code_show(l)
         self.cur.close()
         self.conn.close()
         time_elapsed = time.time() - t0
@@ -519,6 +411,7 @@ class Match:
         @param sql : match functions sql
             rename : name of inserted table
         """
+        print sql
         self.cur.execute(sql)
         rows = self.cur.fetchall()
         res = 0
@@ -638,16 +531,16 @@ class PerfectMatch(Match):
         print('Strings Match {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
 
-    def bytes_hash_match(self):
+    def basic_infor_match(self):
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results()
         self.conn, self.cur = sql_op.attach(self.src_name)
-        rules_name = ['Same Name Match', 'Rare Bytes Hash Match', 'Rare Mnemonics Match']
         res = 0
-        for rules in rules_name:
-            sql = sql_dict[rules]
-            res += self.insert_results(sql)
+        for sql_d in sql_collecs:
+            if sql_d["type"] == "Basic Features Match":
+                sql = sql_d["sql"]
+                res += self.insert_results(sql)
         if self.cur is not None:
             self.cur.close()
             self.conn.close()
@@ -692,11 +585,11 @@ class PerfectMatch(Match):
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results()
         self.conn, self.cur = sql_op.attach(self.src_name)
-        rules_name = ['Rare Constants Match', 'Mnemonics Constants Match']
         res = 0
-        for rules in rules_name:
-            sql = sql_dict[rules]
-            res += self.insert_results(sql)
+        for sql_d in sql_collecs:
+            if sql_d["type"] == "Constants Match":
+                sql = sql_d["sql"]
+                res += self.insert_results(sql)
         if self.cur is not None:
             self.cur.close()
             self.conn.close()
@@ -712,11 +605,11 @@ class PerfectMatch(Match):
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results()
         self.conn, self.cur = sql_op.attach(self.src_name)
-        rules_name = ['Rare Md_Index Match', 'Rare KOKA Hash Match', 'Md_Index Constants Match', 'Rare KOKA Hash Match']
         res = 0
-        for rules in rules_name:
-            sql = sql_dict[rules]
-            res += self.insert_results(sql)
+        for sql_d in sql_collecs:
+            if sql_d["type"] == "CFG Hash Match":
+                sql = sql_d["sql"]
+                res += self.insert_results(sql)
         if self.cur is not None:
             self.cur.close()
             self.conn.close()
@@ -737,9 +630,11 @@ class PerfectMatch(Match):
         """
         sql_src = """select * from diff.callers where caller_address = %s order by call_address
         """
-        sql_func_bin = """select name, numbers, numbers_count, numbers2, numbers2_count, instructions, bytes_hash from functions where address = %s
+        sql_func_bin = """select name, numbers, numbers_count, numbers2, numbers2_count, instructions, bytes_hash 
+            from functions where address = %s
         """
-        sql_func_src = """select name, numbers, numbers_count, numbers2, numbers2_count, instructions, bytes_hash from diff.functions where address = %s
+        sql_func_src = """select name, numbers, numbers_count, numbers2, numbers2_count, instructions, bytes_hash 
+            from diff.functions where address = %s
         """
         res = 0
         for row in rows:
@@ -795,9 +690,11 @@ class PerfectMatch(Match):
         if len(rows) == 0:
             return
         self.conn, self.cur = sql_op.attach(self.src_name)
-        sql_bin = """select callers, callers_count, name, numbers, numbers_count, bytes_hash, mnemonics, numbers2 from functions where address = %s
+        sql_bin = """select callers, callers_count, name, numbers, numbers_count, bytes_hash, mnemonics, numbers2 
+            from functions where address = %s
         """
-        sql_src = """select callers, callers_count, name, numbers, numbers_count, bytes_hash, mnemonics, numbers2 from diff.functions where address = %s
+        sql_src = """select callers, callers_count, name, numbers, numbers_count, bytes_hash, mnemonics, numbers2 
+            from diff.functions where address = %s
         """
         res = 0
         for row in rows:
@@ -944,21 +841,19 @@ class PerfectMatch(Match):
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results()
         self.conn, self.cur = sql_op.attach(self.src_name)
-        rules = ['Bytes Hash Neighbor Match', 'Mnemonics Neighbor Match', 'Constants Neighbor Match',
-                 'MD Index Neighbor Match', 'KOKA Hash Neighbor Match', 'Assembly Neighbor Match',
-                 'Clean Assembly Neighbor Match', 'Pseudocode Neighbor Match', 'Clean Pseudocode Neighbor Match']
         res = 0
-        for rule in rules:
-            sql = sql_dict[rule]
-            self.cur.execute(sql)
-            rows = self.cur.fetchall()
-            pairs = {}
-            for row in rows:
-                try:
-                    pairs[str(row[0])].append(str(row[4]))
-                except:
-                    pairs[str(row[0])] = [str(row[4])]
-            res += self.do_neighbor_match(pairs, rule)
+        for sql_d in sql_collecs:
+            if sql_d["type"] == "Neighbor Match":
+                sql = sql_d["sql"]
+                self.cur.execute(sql)
+                rows = self.cur.fetchall()
+                pairs = {}
+                for row in rows:
+                    try:
+                        pairs[str(row[0])].append(str(row[4]))
+                    except:
+                        pairs[str(row[0])] = [str(row[4])]
+                res += self.do_neighbor_match(pairs, sql_d["description"])
         if self.cur is not None:
             self.cur.close()
             self.conn.close()
@@ -976,12 +871,11 @@ class PerfectMatch(Match):
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         self.conn, self.cur = sql_op.attach(self.src_name)
-        rules = ['Rare Pseudocode Match', 'Rare Assembly Match',
-                 'Rare Clean Pseudocode Match', 'Rare Clean Assembly Match']
         res = 0
-        for rule in rules:
-            sql = sql_dict[rule]
-            res += self.insert_results(sql)
+        for sql_d in sql_collecs:
+            if sql_d["type"] == "Code Match":
+                sql = sql_d["sql"]
+                res += self.insert_results(sql)
         self.cur.close()
         self.conn.close()
         time_elapsed = time.time() - t0
@@ -994,13 +888,11 @@ class PerfectMatch(Match):
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         self.conn, self.cur = sql_op.attach(self.src_name)
-        rules = ['Rare Mnemonics Spp Match', 'Rare Pseudocode Fuzzy Hash Match(Mixed)',
-                 'Rare Pseudocode Fuzzy Hash Match(AST)', 'Rare Pseudocode Fuzzy Hash Match(Normal)',
-                 'Rare Pseudocode Fuzzy Hash Match(Reverse)']
         res = 0
-        for rule in rules:
-            sql = sql_dict[rule]
-            res += self.insert_results(sql, 'results_fuzzy_code_hash')
+        for sql_d in sql_collecs:
+            if sql_d["type"] == "Code Hash Match":
+                sql = sql_d["sql"]
+                res += self.insert_results(sql, 'results_fuzzy_code_hash')
         self.cur.close()
         self.conn.close()
         time_elapsed = time.time() - t0
@@ -1009,7 +901,7 @@ class PerfectMatch(Match):
         if res != 0:
             self.call_match()
 
-    def do_perfect_match(self, module='match'):
+    def do_perfect_match(self, module='cfg test'):
         """
         do perfect match
         include Basic Features Match, Function Call Match, Constants Match, CFG Hash Match, Neighbor Match
@@ -1018,16 +910,16 @@ class PerfectMatch(Match):
         if module.startswith('match'):
             self.af.save_functions(self.functions)
             self.af.save_callers(self.functions)
-            self.bytes_hash_match()
+            self.basic_infor_match()
             self.af.save_constants(self.functions)
             self.constants_match()
             self.af.update_cfg_hash(self.functions)
         elif module.startswith('init'):
             self.af.analyse_symbol()
-            self.bytes_hash_match()
+            self.basic_infor_match()
             self.constants_match()
         elif module.startswith('test'):
-            self.bytes_hash_match()
+            self.basic_infor_match()
             self.constants_match()
         self.cfg_hash_match()
         self.neighbor_match()
@@ -1097,12 +989,11 @@ class MultipleMatch(Match):
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         self.conn, self.cur = sql_op.attach(self.src_name)
-        rules_name = ['Supplement Match', 'Linker Optimization Match',
-                      'Same Bytes Hash Match']
         res = 0
-        for rules in rules_name:
-            sql = sql_dict[rules]
-            res += self.insert_results(sql, 'results_multi')
+        for sql_d in sql_collecs:
+            if sql_d["type"] == "Bytes Hash Match":
+                sql = sql_d["sql"]
+                res += self.insert_results(sql, 'results_multi')
         self.cur.close()
         self.conn.close()
         time_elapsed = time.time() - t0
@@ -1145,14 +1036,11 @@ class FuzzyMatch(Match):
         sql_op.create_results_fuzzy()
         self.conn, self.cur = sql_op.attach(self.src_name)
         res = 0
-        rules = ['Mnemonics Score Match', 'Constants Score Match', 'MD Index Score Match', 'KOKA Hash Score Match',
-                 'Mnemonics Spp Match', 'Pseudocode Fuzzy Hash Match(Mixed)',
-                 'Pseudocode Fuzzy Hash Match(AST)', 'Pseudocode Fuzzy Hash Match(Normal)',
-                 'Pseudocode Fuzzy Hash Match(Reverse)']
-        for rule in rules:
-            sql = sql_dict[rule]
-            self.insert_results(sql, 'results_fuzzy')
-            res += self.delete_results(sql_op)
+        for sql_d in sql_collecs:
+            if sql_d["type"] == "Score Match":
+                sql = sql_d["sql"]
+                self.insert_results(sql, 'results_fuzzy')
+                res += self.delete_results(sql_op)
         self.cur.close()
         self.conn.close()
 

@@ -1,4 +1,4 @@
-from test.sql_opt import *
+from adap_sql import *
 from idc import *
 from idautils import *
 from idaapi import *
@@ -31,12 +31,6 @@ class Rename:
         for row in rows:
             if str(row[1]).startswith('sub_') or str(row[1]).startswith('nullsub_'):
                 MakeName(int(row[0]), 'wyx_' + str(row[3]).replace('`', '').replace('-', ''))
-
-    def show_des(self):
-        sql_op = SqlOperate(self.bin_name)
-        rows = sql_op.read_results_des()
-        for row in rows:
-            print row[1] + '->' + row[0]
 
 
 class SourceCodeViewer(object):
