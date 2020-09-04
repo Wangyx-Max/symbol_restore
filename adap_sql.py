@@ -760,7 +760,6 @@ class SqlOperate:
             print("create results error")
         finally:
             self.cur.close()
-            self.conn.close()
 
     def create_results_multi(self):
         self.connect()
@@ -778,7 +777,6 @@ class SqlOperate:
             print("create results_multi error")
         finally:
             self.cur.close()
-            self.conn.close()
 
     def create_results_fuzzy(self):
         self.connect()
@@ -797,7 +795,6 @@ class SqlOperate:
             print("create results_fuzzy error")
         finally:
             self.cur.close()
-            self.conn.close()
 
     def create_functions(self):
         self.connect()
@@ -846,7 +843,6 @@ class SqlOperate:
             print("create functions error!")
         finally:
             self.cur.close()
-            self.conn.close()
 
     def create_constants(self):
         self.connect()
@@ -862,16 +858,15 @@ class SqlOperate:
             print("create constants error!")
         finally:
             self.cur.close()
-            self.conn.close()
 
     def create_callers(self):
         self.connect()
         sql = """create table if not exists callers(
                 caller_id integer not null references functions(id) on delete cascade,
                 caller_address text not null,
-                call_address text not null,
+                call_address integer not null,
                 callee_address text not null,
-                primary key(call_address, callee_address))
+                primary key(caller_address, callee_address))
         """
         try:
             self.cur.execute(sql)
@@ -880,7 +875,6 @@ class SqlOperate:
             print("create callers error!")
         finally:
             self.cur.close()
-            self.conn.close()
 
     def do_insert_function(self, l):
         """
@@ -996,7 +990,7 @@ class SqlOperate:
             res = []
         finally:
             self.cur.close()
-            self.conn.close()
+            
         return res
 
     def read_results_multi(self, t=''):
@@ -1015,7 +1009,7 @@ class SqlOperate:
             res = []
         finally:
             self.cur.close()
-            self.conn.close()
+            
         return res
 
     def read_results_fuzzy(self, des=None):
@@ -1036,7 +1030,7 @@ class SqlOperate:
             res = []
         finally:
             self.cur.close()
-            self.conn.close()
+            
         return res
 
     def read_results_instr(self, src_name):
@@ -1099,7 +1093,25 @@ class SqlOperate:
                 res[new_constants] = [str(row[0])]
         if self.cur is not None:
             self.cur.close()
-            self.conn.close()
+            
         return res
 
-
+    def read_callers(self, name=None):
+        if name is None:
+            self.connect()
+            sql_callers = """select * from callers order by call_address
+                """
+        else:
+            self.attach(name)
+            sql_callers = """select * from diff.callers order by call_address"""
+        self.cur.execute(sql_callers)
+        rows = self.cur.fetchall()
+        callers = {}
+        for row in rows:
+            try:
+                callers[str(row[1])].append(str(row[3]))
+            except:
+                callers[str(row[1])] = [str(row[3])]
+        if self.cur is not None:
+            self.cur.close()
+        return callers

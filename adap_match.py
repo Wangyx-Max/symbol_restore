@@ -255,6 +255,7 @@ class AnalyseFunction:
         self.cur = False
 
     def save_functions(self, functions):
+        show_wait_box('Basic Information saving ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.name)
         sql_op.create_functions()
@@ -269,8 +270,10 @@ class AnalyseFunction:
         time_elapsed = time.time() - t0
         print('Create Functions {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
 
     def save_constants(self, functions):
+        show_wait_box('Constants Feature saving ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.name)
         sql_op.create_constants()
@@ -285,8 +288,10 @@ class AnalyseFunction:
         time_elapsed = time.time() - t0
         print('Create Constants {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
 
     def update_cfg_hash(self, functions):
+        show_wait_box('CFG Hash saving ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.name)
         sql_op.create_functions()
@@ -301,8 +306,10 @@ class AnalyseFunction:
         time_elapsed = time.time() - t0
         print('Update cfg hash {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
 
     def save_callers(self, functions):
+        show_wait_box('Call  saving ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.name)
         sql_op.create_callers()
@@ -316,8 +323,10 @@ class AnalyseFunction:
         self.conn.close()
         time_elapsed = time.time() - t0
         print("Create Callers {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
 
     def update_code(self, functions):
+        show_wait_box('Code Feature saving ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.name)
         self.conn, self.cur = sql_op.connect()
@@ -330,8 +339,10 @@ class AnalyseFunction:
         self.conn.close()
         time_elapsed = time.time() - t0
         print("Update code {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
 
     def update_code_show(self, functions):
+        show_wait_box('Code Feature saving ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.name)
         self.conn, self.cur = sql_op.connect()
@@ -344,6 +355,7 @@ class AnalyseFunction:
         self.conn.close()
         time_elapsed = time.time() - t0
         print("Update code {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
 
     def analyse_symbol_slow(self):
         self.save_functions(self.functions)
@@ -411,7 +423,6 @@ class Match:
         @param sql : match functions sql
             rename : name of inserted table
         """
-        print sql
         self.cur.execute(sql)
         rows = self.cur.fetchall()
         res = 0
@@ -423,7 +434,7 @@ class Match:
                                 str(row[10]), str(row[11]),
                                 str(row[12]), str(row[13]))
                 # r = make_score(row, self.cur)
-                if rename.endswith('code_hash') and r == 1:
+                if rename.endswith('code_hash') and r >= 1.0:
                     l = (str(row[0]), str(row[1]), str(row[4]), str(row[3]), str(row[5]))
                 elif r > 0.99:
                     l = (str(row[0]), str(row[1]), str(row[4]), str(row[3]), r, str(row[5]))
@@ -532,6 +543,7 @@ class PerfectMatch(Match):
             time_elapsed // 60, time_elapsed % 60))
 
     def basic_infor_match(self):
+        show_wait_box('Basic Information matching ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results()
@@ -547,6 +559,7 @@ class PerfectMatch(Match):
         time_elapsed = time.time() - t0
         print('Basic Information Match:' + str(res))
         print("Basic Information Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
         if res != 0:
             self.call_match()
 
@@ -579,6 +592,7 @@ class PerfectMatch(Match):
         return res
 
     def constants_match(self):
+        show_wait_box('Constants Feature matching ... ')
         t0 = time.time()
         self.do_constants_match()
 
@@ -597,10 +611,12 @@ class PerfectMatch(Match):
         print('Constants Match:' + str(res))
         print('Constants Match {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
         if res != 0:
             self.call_match()
 
     def cfg_hash_match(self):
+        show_wait_box('CFG Hash matching ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results()
@@ -616,20 +632,17 @@ class PerfectMatch(Match):
         time_elapsed = time.time() - t0
         print("CFG Hash Match :" + str(res))
         print("CFG Hash Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
         if res != 0:
             self.call_match()
 
-    def do_callee_match(self):
+    def do_callee_match(self, bin_callers, src_callers):
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results()
         rows = sql_op.read_results()
         if len(rows) == 0:
             return
         self.conn, self.cur = sql_op.attach(self.src_name)
-        sql_bin = """select * from callers where caller_address = %s order by call_address
-        """
-        sql_src = """select * from diff.callers where caller_address = %s order by call_address
-        """
         sql_func_bin = """select name, numbers, numbers_count, numbers2, numbers2_count, instructions, bytes_hash 
             from functions where address = %s
         """
@@ -638,20 +651,11 @@ class PerfectMatch(Match):
         """
         res = 0
         for row in rows:
-            self.cur.execute(sql_bin % row[0])
-            callers = self.cur.fetchall()
-            if len(callers) == 0:
+            try:
+                callers_bin = bin_callers[str(row[0])]
+                callers_src = src_callers[str(row[2])]
+            except:
                 continue
-            callers_bin = []
-            for caller in callers:
-                callers_bin.append(caller[3])
-            self.cur.execute(sql_src % row[2])
-            callers = self.cur.fetchall()
-            if len(callers) == 0:
-                continue
-            callers_src = []
-            for caller in callers:
-                callers_src.append(caller[3])
             if len(callers_bin) == 1 and len(callers_src) == 1:
                 if int(callers_bin[0]) not in self.functions:
                     continue
@@ -739,10 +743,14 @@ class PerfectMatch(Match):
         return res
 
     def call_match(self):
+        show_wait_box('Call  matching ... ')
         t0 = time.time()
         res = 0
+        sql_op = SqlOperate(self.bin_name)
+        bin_callers = sql_op.read_callers()
+        src_callers = sql_op.read_callers(self.src_name)
         while True:
-            s = self.do_callee_match() + self.do_caller_match()
+            s = self.do_callee_match(bin_callers, src_callers) + self.do_caller_match()
             res += s
             if s == 0:
                 break
@@ -750,6 +758,7 @@ class PerfectMatch(Match):
         print('Call Match:' + str(res))
         print('Call Match {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
         return res
 
     def do_neighbor_match(self, pairs, rule):
@@ -837,6 +846,7 @@ class PerfectMatch(Match):
         return res
 
     def neighbor_match(self):
+        show_wait_box('Neighbor matching ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results()
@@ -863,11 +873,13 @@ class PerfectMatch(Match):
         time_elapsed = time.time() - t0
         print('Neighbor Match:' + str(res))
         print('Neighbor Match {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
         if res != 0:
             res += self.call_match()
         return res
 
     def code_match(self):
+        show_wait_box('Code Feature matching ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         self.conn, self.cur = sql_op.attach(self.src_name)
@@ -881,10 +893,12 @@ class PerfectMatch(Match):
         time_elapsed = time.time() - t0
         print('Code Match:' + str(res))
         print("Code Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
         if res != 0:
             self.call_match()
 
     def code_hash_match(self):
+        show_wait_box('Code Hash saving ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         self.conn, self.cur = sql_op.attach(self.src_name)
@@ -898,10 +912,11 @@ class PerfectMatch(Match):
         time_elapsed = time.time() - t0
         print('Code Hash Match:' + str(res))
         print("Code Hash Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
         if res != 0:
             self.call_match()
 
-    def do_perfect_match(self, module='cfg test'):
+    def do_perfect_match(self, module='match'):
         """
         do perfect match
         include Basic Features Match, Function Call Match, Constants Match, CFG Hash Match, Neighbor Match
@@ -923,6 +938,7 @@ class PerfectMatch(Match):
             self.constants_match()
         self.cfg_hash_match()
         self.neighbor_match()
+        return
 
     def do_slow_match(self, module='match'):
         """
@@ -938,6 +954,7 @@ class PerfectMatch(Match):
             s = self.neighbor_match()
             if s == 0:
                 break
+        return
 
 
 class MultipleMatch(Match):
@@ -958,6 +975,7 @@ class MultipleMatch(Match):
         return 0
 
     def swallow_match(self):
+        show_wait_box('Swallow matching ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results_multi()
@@ -984,8 +1002,10 @@ class MultipleMatch(Match):
         time_elapsed = time.time() - t0
         print('Swallow Match:' + str(res))
         print('Swallow Match {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
 
     def linker_optimization_match(self):
+        show_wait_box('Bytes Hash matching ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         self.conn, self.cur = sql_op.attach(self.src_name)
@@ -999,6 +1019,7 @@ class MultipleMatch(Match):
         time_elapsed = time.time() - t0
         print('Linker Optimization Match:' + str(res))
         print("Linker Optimization Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
 
     def do_multiple_match(self):
         """
@@ -1031,6 +1052,7 @@ class FuzzyMatch(Match):
         return res
 
     def score_match(self):
+        show_wait_box('Score matching ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results_fuzzy()
@@ -1047,6 +1069,7 @@ class FuzzyMatch(Match):
         time_elapsed = time.time() - t0
         print('Score Match:' + str(res))
         print("Score Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
 
     def do_fuzzy_match(self):
         """

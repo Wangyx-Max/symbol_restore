@@ -6,36 +6,20 @@ from adap_match import *
 from adap_show import *
 
 
-class busy_form_t(ida_kernwin.Form):
+class Options:
+    def __init__(self, **kwargs):
+        sqlite_db = os.path.splitext(GetIdbPath())[0] + ".sqlite"
+        self.file_out = kwargs.get('file_out', sqlite_db)
+        self.file_in = kwargs.get('file_in', '')
+        self.perfect = kwargs.get('perfect_match', True)
+        self.slow = kwargs.get('slow_match', False)
+        self.multi = kwargs.get('multi_match', False)
+        self.fuzzy = kwargs.get('fuzzy_match', False)
+        self.show = kwargs.get('show', True)
+        self.only_show = kwargs.get('only_show', False)
 
-    class test_chooser_t(ida_kernwin.Choose):
-        """
-        A simple chooser to be used as an embedded chooser
-        """
-        def __init__(self, title, nb=5, flags=ida_kernwin.Choose.CH_MULTI):
-            ida_kernwin.Choose.__init__(
-                self,
-                title,
-                [
-                    ["Address", 10],
-                    ["Name", 30]
-                ],
-                flags=flags,
-                embedded=True,
-                width=30,
-                height=6)
-            self.items = [ [str(x), "func_%04d" % x] for x in range(nb + 1) ]
-            self.icon = 5
 
-        def OnGetLine(self, n):
-            print("getline %d" % n)
-            return self.items[n]
-
-        def OnGetSize(self):
-            n = len(self.items)
-            print("getsize -> %d" % n)
-            return n
-
+class ExporterSetup(ida_kernwin.Form):
     def __init__(self):
         self.invert = False
         F = ida_kernwin.Form
@@ -52,83 +36,98 @@ SQLite databases:
 <Fuzzy Match:{rFuzzyMatch}>{cGroup1}> 
 
 <##Show boxes##Show Results:{rShowResults}>
+<Only Show Results:{rOnlyShowResults}>
 <Save Results:{rSaveResults}>{cGroup2}>
 
 """, {
-            'iFileOpen': F.FileInput(open=True),
-            'iFileSave': F.FileInput(save=True),
-            'cGroup1': F.ChkGroupControl(("rPerfectMatch", "rSlowMatch", "rMultiMatch", "rFuzzyMatch")),
-            'cGroup2': F.RadGroupControl(("rShowResults", "rSaveResults"))
-        })
+                'iFileOpen': F.FileInput(open=True),
+                'iFileSave': F.FileInput(save=True),
+                'cGroup1': F.ChkGroupControl(("rPerfectMatch", "rSlowMatch", "rMultiMatch", "rFuzzyMatch")),
+                'cGroup2': F.RadGroupControl(("rShowResults", "rSaveResults"))
+            })
 
-    @staticmethod
-    def compile_and_fiddle_with_fields():
-        f = busy_form_t()
-        f, args = f.Compile()
-        print(args[0])
-        print(args[1:])
-        f.rPerfectMatch.checked = True
-        f.rMultiMatch.checked = False
-        f.rFuzzyMatch.checked = False
-        print(hex(f.cGroup1.value))
+    def set_options(self, opts):
+        self.iFileSave.value = opts.file_out
+        self.iFileOpen.value = opts.file_in
+        self.rPerfectMatch.checked = opts.perfect
+        self.rSlowMatch.checked = opts.slow
+        self.rMultiMatch.checked = opts.multi
+        self.rFuzzyMatch.checked = opts.fuzzy
+        self.rShowResults.selected = opts.show
+        self.rOnlyShowResults.selected = opts.show
 
-        f.Free()
-
-    @staticmethod
-    def test():
-        f = busy_form_t()
-
-        # Compile (in order to populate the controls)
-        f.Compile()
-
-        f.iFileSave.value = os.path.splitext(idc.GetIdbPath())[0] + ".sqlite"
-        f.rPerfectMatch.checked = True
-        f.rSlowMatch.checked = False
-        f.rMultiMatch.checked = False
-        f.rFuzzyMatch.checked = False
-        f.rSaveResults.selected = True
-
-        # Execute the form
-        ok = f.Execute()
-        if ok == 1:
-            if f.iFileOpen.value == "":
-                t0 = time.time()
-                af = AnalyseFunction(f.iFileSave.value)
-                if f.rSlowMatch.checked is True:
-                    af.analyse_symbol_slow()
-                else:
-                    af.analyse_symbol()
-                time_elapsed = time.time() - t0
-                print('Total time in {:.0f}m {:.0f}s'.format(
-                    time_elapsed // 60, time_elapsed % 60))
-            else:
-                t0 = time.time()
-                pm = PerfectMatch(f.iFileSave.value, f.iFileOpen.value)
-                if f.rPerfectMatch.checked is True:
-                    pm.do_perfect_match()
-                else:
-                    pm.do_perfect_match('init')
-                if f.rSlowMatch.checked is True:
-                    if f.rPerfectMatch.checked is True:
-                        pm.do_slow_match()
-                    else:
-                        pm.do_slow_match('init')
-                if f.rMultiMatch.checked is True:
-                    mm = MultipleMatch(f.iFileSave.value, f.iFileOpen.value)
-                    mm.do_multiple_match()
-                if f.rFuzzyMatch.checked is True and f.rSlowMatch.checked is True:
-                    fm = FuzzyMatch(f.iFileSave.value, f.iFileOpen.value)
-                    fm.do_fuzzy_match()
-                time_elapsed = time.time() - t0
-                print('Total time in {:.0f}m {:.0f}s'.format(
-                    time_elapsed // 60, time_elapsed % 60))
-            if f.rShowResults.selected is True:
-                show_all_results(f.iFileSave.value, f.iFileOpen.value)
-                show_all_results(f.iFileSave.value, f.iFileOpen.value, 'Multiple Match')
-                show_all_results(f.iFileSave.value, f.iFileOpen.value, 'Fuzzy Match')
-
-        # Dispose the form
-        f.Free()
+    def get_options(self):
+        opts = dict(
+            file_out=self.iFileSave.value,
+            file_in=self.iFileOpen.value,
+            perfect=self.rPerfectMatch.checked,
+            slow=self.rSlowMatch.checked,
+            multi=self.rMultiMatch.checked,
+            fuzzy=self.rFuzzyMatch.checked,
+            show=self.rShowResults.selected,
+            only_show=self.rOntlyShowResults.selected
+        )
+        return Options(**opts)
 
 
-busy_form_t.test()
+def diff_or_match(**options):
+    total_functions = len(list(Functions()))
+    if GetIdbPath() == "" or total_functions == 0:
+        return
+    opts = Options(**options)
+    x = ExporterSetup()
+    x.Compile()
+    x.set_options(opts)
+    res = False
+    if not x.Execute():
+        return res
+
+    opts = x.get_options()
+    show_wait_box("Start Running ... ")
+    if opts.file_out == opts.file_in:
+        return res
+    elif opts.file_in == "":
+        af = AnalyseFunction(opts.file_out)
+        if opts.slow is True:
+            af.analyse_symbol_slow()
+        else:
+            af.analyse_symbol()
+        res = True
+    elif opts.only_show is True:
+        show_all_results(opts.file_out, opts.file_in)
+        if opts.multi is True:
+            show_all_results(opts.file_out, opts.file_in, 'Multiple Match')
+        if opts.fuzzy is True:
+            show_all_results(opts.file_out, opts.file_in, 'Fuzzy Match')
+    else:
+        pm = PerfectMatch(opts.file_out, opts.file_in)
+        if opts.perfect is True:
+            pm.do_perfect_match()
+            if opts.slow is True:
+                pm.do_slow_match()
+        else:
+            pm.do_perfect_match('init')
+            if opts.slow is True:
+                pm.do_slow_match('init')
+        if opts.multi is True:
+            mm = MultipleMatch(opts.file_out, opts.file_in)
+            mm.do_multiple_match()
+        if opts.fuzzy is True and opts.slow is True:
+            fm = FuzzyMatch(opts.file_out, opts.file_in)
+            fm.do_fuzzy_match()
+        if opts.show is True:
+            show_all_results(opts.file_out, opts.file_in)
+            if opts.multi is True:
+                show_all_results(opts.file_out, opts.file_in, 'Multiple Match')
+            if opts.fuzzy is True:
+                show_all_results(opts.file_out, opts.file_in, 'Fuzzy Match')
+        res = True
+    return res
+
+
+def main():
+    diff_or_match()
+    hide_wait_box()
+
+
+main()
