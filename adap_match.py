@@ -899,7 +899,7 @@ class PerfectMatch(Match):
             self.call_match()
 
     def code_hash_match(self):
-        show_wait_box('Code Hash saving ... ')
+        show_wait_box('Code Hash matching ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         self.conn, self.cur = sql_op.attach(self.src_name)
@@ -913,6 +913,25 @@ class PerfectMatch(Match):
         time_elapsed = time.time() - t0
         print('Code Hash Match:' + str(res))
         print("Code Hash Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+        hide_wait_box()
+        if res != 0:
+            self.call_match()
+
+    def score_match(self):
+        show_wait_box('Score matching ... ')
+        t0 = time.time()
+        sql_op = SqlOperate(self.bin_name)
+        self.conn, self.cur = sql_op.attach(self.src_name)
+        res = 0
+        for sql_d in sql_collecs:
+            if sql_d['type'] == 'Score Match':
+                sql = sql_d["sql"]
+                res += self.insert_results(sql, 'results_fuzzy_code_hash')
+        self.cur.close()
+        self.conn.close()
+        time_elapsed = time.time() - t0
+        print('Score Match:' + str(res))
+        print("Score Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
         hide_wait_box()
         if res != 0:
             self.call_match()
@@ -949,6 +968,7 @@ class PerfectMatch(Match):
         self.update_match_results()
         if module.startswith('match'):
             self.af.update_code(self.functions)
+        self.score_match()
         self.code_match()
         self.code_hash_match()
         while True:
@@ -1052,15 +1072,18 @@ class FuzzyMatch(Match):
                 res += 1
         return res
 
-    def score_match(self):
-        show_wait_box('Score matching ... ')
+    def do_fuzzy_match(self):
+        """
+        do fuzzy match
+        """
+        show_wait_box('Fuzzy matching ... ')
         t0 = time.time()
         sql_op = SqlOperate(self.bin_name)
         sql_op.create_results_fuzzy()
         self.conn, self.cur = sql_op.attach(self.src_name)
         res = 0
         for sql_d in sql_collecs:
-            if sql_d["type"] == "Score Match":
+            if sql_d["type"] == "Fuzzy Match":
                 sql = sql_d["sql"]
                 self.insert_results(sql, 'results_fuzzy')
                 res += self.delete_results(sql_op)
@@ -1068,12 +1091,6 @@ class FuzzyMatch(Match):
         self.conn.close()
 
         time_elapsed = time.time() - t0
-        print('Score Match:' + str(res))
-        print("Score Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
+        print('Fuzzy Match:' + str(res))
+        print("Fuzzy Match {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
         hide_wait_box()
-
-    def do_fuzzy_match(self):
-        """
-        do score match
-        """
-        self.score_match()

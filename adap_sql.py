@@ -217,8 +217,8 @@ sql_dict = {
     "description": "MD Index Neighbor Match",
     "sql": """select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
                     'MD Index Neighbor Match' description, f.id bin_id
-                    from (select * from functions where md_index != 0) f,
-                        (select * from diff.functions where md_index != 0) df
+                    from (select * from functions where md_index) f,
+                        (select * from diff.functions where md_index) df
                     where f.md_index = df.md_index
                     and f.size = df.size
                     and f.instructions = df.instructions
@@ -234,8 +234,8 @@ sql_dict = {
     "description": "KOKA Hash Neighbor Match",
     "sql": """select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
                     'KOKA Hash Neighbor Match' description, f.id bin_id
-                    from (select * from functions where kgh_hash != 0) f,
-                        (select * from diff.functions where kgh_hash != 0) df
+                    from (select * from functions where kgh_hash) f,
+                        (select * from diff.functions where kgh_hash) df
                     where f.kgh_hash = df.kgh_hash
                     and f.kgh_hash != 0
                     and f.size = df.size
@@ -252,8 +252,8 @@ sql_dict = {
     "description": "Assembly Neighbor Match",
     "sql": """select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
                     'Assembly Neighbor Match' description, f.id bin_id
-                    from (select * from functions where assembly != 0) f,
-                        (select * from diff.functions where assembly != 0) df
+                    from (select * from functions where assembly) f,
+                        (select * from diff.functions where assembly) df
                     where f.assembly = df.assembly
                     and f.address not in (select bin_address from results)
     """
@@ -265,8 +265,8 @@ sql_dict = {
     "description": "Clean Assembly Neighbor Match",
     "sql": """select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
                     'Clean Assembly Neighbor Match' description, f.id bin_id
-                    from (select * from functions where clean_assembly != 0) f,
-                        (select * from diff.functions where clean_assembly != 0) df
+                    from (select * from functions where clean_assembly) f,
+                        (select * from diff.functions where clean_assembly) df
                     where f.clean_assembly = df.clean_assembly
                     and f.address not in (select bin_address from results)
     """
@@ -278,8 +278,8 @@ sql_dict = {
     "description": "Pseudocode Neighbor Match",
     "sql": """select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
                     'Assembly Neighbor Match' description, f.id bin_id
-                    from (select * from functions where pseudocode != 0) f,
-                        (select * from diff.functions where pseudocode != 0) df
+                    from (select * from functions where pseudocode) f,
+                        (select * from diff.functions where pseudocode) df
                     where f.pseudocode = df.pseudocode
                     and f.pseudocode_lines > 1
                     and f.address not in (select bin_address from results)
@@ -292,14 +292,110 @@ sql_dict = {
     "description": "Clean Pseudocode Neighbor Match",
     "sql": """select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
                     'Clean Assembly Neighbor Match' description, f.id bin_id
-                    from (select * from functions where clean_pseudo != 0) f,
-                        (select * from diff.functions where clean_pseudo != 0) df
+                    from (select * from functions where clean_pseudo) f,
+                        (select * from diff.functions where clean_pseudo) df
                     where f.clean_pseudo = df.clean_pseudo
                     and f.pseudocode_lines > 1
                     and f.address not in (select bin_address from results)
     """
 }
 sql_collecs.append(sql_dict)
+
+sql_dict = {
+    "type": "Score Match",
+    "description": "Bytes Hash Score Match",
+    "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Bytes Hash Score Match' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions 
+                            where address not in (select bin_address from results)
+                            group by bytes_hash having count(*) = 1) f,
+                        diff.functions df
+                    where f.bytes_hash = df.bytes_hash
+                    group by ea having count(ea) = 1
+    """
+}
+sql_collecs.append(sql_dict)
+
+sql_dict = {
+    "type": "Score Match",
+    "description": "Mnemonics Score Match",
+    "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Mnemonics Score Match' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions 
+                            where address not in (select bin_address from results)
+                            group by mnemonics, numbers, numbers2 having count(*) = 1) f,
+                        diff.functions df
+                    where f.mnemonics = df.mnemonics
+                    group by ea having count(ea) = 1
+    """
+}
+sql_collecs.append(sql_dict)
+
+sql_dict = {
+    "type": "Score Match",
+    "description": "Constants Score Match",
+    "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Constants Score Match' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions 
+                            where address not in (select bin_address from results)
+                            group by constants, numbers, numbers2 having count(*) = 1) f,
+                        diff.functions df
+                    where f.constants = df.constants
+                    and f.numbers = df.numbers
+                    and f.numbers2 = df.numbers2
+                    group by ea having count(ea) = 1
+    """
+}
+sql_collecs.append(sql_dict)
+
+sql_dict = {
+    "type": "Score Match",
+    "description": "MD Index Score Match",
+    "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'MD Index Score Match' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions 
+                            where address not in (select bin_address from results)
+                            group by md_index having count(*) = 1) f,
+                        diff.functions df
+                    where f.md_index = df.md_index
+                    group by ea having count(ea) = 1
+    """
+}
+sql_collecs.append(sql_dict)
+
+sql_dict = {
+    "type": "Score Match",
+    "description": "KOKA Hash Score Match",
+    "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'KOKA Hash Score Match' description,
+        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
+        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
+        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
+        f.numbers2 lnums1, df.numbers2 lnums2
+                    from (select * from functions 
+                            where address not in (select bin_address from results)
+                            group by kgh_hash having count(*) = 1) f,
+                        diff.functions df
+                    where f.kgh_hash = df.kgh_hash
+                    group by ea having count(ea) = 1
+    """
+}
 
 sql_dict = {
     "type": "Code Match",
@@ -573,7 +669,7 @@ sql_dict = {
 sql_collecs.append(sql_dict)
 
 sql_dict = {
-    "type": "Score Match",
+    "type": "Fuzzy Match",
     "description": "Constants Score Match",
     "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
         df.address src_address, 'Constants Score Match' description, 
@@ -598,7 +694,7 @@ sql_dict = {
 sql_collecs.append(sql_dict)
 
 sql_dict = {
-    "type": "Score Match",
+    "type": "Fuzzy Match",
     "description": "MD Index Score Match",
     "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
         df.address src_address, 'MD Index Score Match' description, 
@@ -615,13 +711,13 @@ sql_dict = {
                                         union select src_address from results_multi
                                         union select src_address from results_fuzzy)) df
                     where f.md_index = df.md_index
-                    and f.nodes > 1
+                    and f.nodes > 2
     """
 }
 sql_collecs.append(sql_dict)
 
 sql_dict = {
-    "type": "Score Match",
+    "type": "Fuzzy Match",
     "description": "KOKA Hash Score Match",
     "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
         df.address src_address, 'KOKA Hash Score Match' description, 
@@ -638,13 +734,13 @@ sql_dict = {
                                         union select src_address from results_multi
                                         union select src_address from results_fuzzy)) df
                     where f.kgh_hash = df.kgh_hash
-                    and f.nodes > 1 or f.instructions > 5
+                    and f.nodes > 2 or f.instructions > 10
     """
 }
 sql_collecs.append(sql_dict)
 
 sql_dict = {
-    "type": "Score Match",
+    "type": "Fuzzy Match",
     "description": "Mnemonics Spp Score Match",
     "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
         df.address src_address, 'Mnemonics Spp Score Match' description,
@@ -667,7 +763,7 @@ sql_dict = {
 sql_collecs.append(sql_dict)
 
 sql_dict = {
-    "type": "Score Match",
+    "type": "Fuzzy Match",
     "description": "Pseudocode Fuzzy Hash Score Match(Mixed)",
     "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
         df.address src_address, 'Pseudocode Fuzzy Hash Score Match(Mixed)' description,
@@ -690,7 +786,7 @@ sql_dict = {
 sql_collecs.append(sql_dict)
 
 sql_dict = {
-    "type": "Score Match",
+    "type": "Fuzzy Match",
     "description": "Pseudocode Fuzzy Hash Score Match(AST)",
     "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
         df.address src_address, 'Pseudocode Fuzzy Hash Score Match(AST)' description,
@@ -713,7 +809,7 @@ sql_dict = {
 sql_collecs.append(sql_dict)
 
 sql_dict = {
-    "type": "Score Match",
+    "type": "Fuzzy Match",
     "description": "Pseudocode Fuzzy Hash Score Match(Normal)",
     "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
         df.address src_address, 'Pseudocode Fuzzy Hash Score Match(Normal)' description,
@@ -736,7 +832,7 @@ sql_dict = {
 sql_collecs.append(sql_dict)
 
 sql_dict = {
-    "type": "Score Match",
+    "type": "Fuzzy Match",
     "description": "Pseudocode Fuzzy Hash Score Match(Reverse)",
     "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name,
         df.address src_address, 'Pseudocode Fuzzy Hash Score Match(Reverse)' description,
