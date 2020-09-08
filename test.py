@@ -1,16 +1,21 @@
 from adap_show import *
-from perfect_match import *
+from adap_match import *
 import time
 
 
 t0 = time.time()
-sqlite_db = "C:\\Users\\Admin\\Desktop\\data8\\libcpp_tests_noSymbol.sqlite"
-sym_db = "C:\\Users\\Admin\\Desktop\\data8\\diff.sqlite"
-
-
+sqlite_db = "C:\\Users\\Admin\\Desktop\\data9\\libcpp_tests_noSymbol.sqlite"
+sym_db = "C:\\Users\\Admin\\Desktop\\data9\\diff.sqlite"
+"""
+mm = MultipleMatch(sqlite_db, sym_db)
+mm.do_multiple_match()
+show_all_results(sqlite_db, sym_db, 'Multiple Match')
+"""
+hide_wait_box()
 fm = FuzzyMatch(sqlite_db, sym_db)
 fm.do_fuzzy_match()
 show_all_results(sqlite_db, sym_db, 'Fuzzy Match')
+
 
 """
 t0 = time.time()

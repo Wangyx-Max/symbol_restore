@@ -242,6 +242,7 @@ def read_code(f):
         = get_code_hash(f, pseudo)
     l = (asm, asm_clean, pseudo, pseudo_clean, pseudocode_lines,
          mnemonics_spp, pseudocode_primes, pseudo_hash1, pseudo_hash2, pseudo_hash3, f)
+    # print l
     return l
 
 
@@ -429,11 +430,7 @@ class Match:
         for row in rows:
             l = (str(row[0]), str(row[1]), str(row[4]), str(row[3]), str(row[5]))
             if rename.startswith('results_fuzzy'):
-                r = check_ratio(str(row[8]), str(row[9]),
-                                str(row[6]), str(row[7]),
-                                str(row[10]), str(row[11]),
-                                str(row[12]), str(row[13]))
-                # r = make_score(row, self.cur)
+                r = make_score(row, self.cur)
                 if rename.endswith('code_hash') and r >= 1.0:
                     l = (str(row[0]), str(row[1]), str(row[4]), str(row[3]), str(row[5]))
                 elif r > 0.99:
@@ -447,6 +444,7 @@ class Match:
         """
         update variable functions and src_matched
         """
+        # print 'here'
         sql_op = SqlOperate(self.bin_name)
         rows = sql_op.read_results()
         sum = 0
@@ -455,18 +453,21 @@ class Match:
                 self.functions.remove(int(row[0]))
                 sum += 1
             self.src_matched.add(int(row[2]))
+        # print len(rows)
         rows = sql_op.read_results_multi()
         for row in rows:
             if int(row[0]) in self.functions:
                 self.functions.remove(int(row[0]))
                 sum += 1
             self.src_matched.add(int(row[2]))
+        # print len(rows)
         rows = sql_op.read_results_fuzzy()
         for row in rows:
             if int(row[0]) in self.functions:
                 self.functions.remove(int(row[1]))
                 sum += 1
             self.src_matched.add(int(row[3]))
+        # print len(rows)
         return sum
 
 

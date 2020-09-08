@@ -4,8 +4,7 @@ from idaapi import *
 
 from hashlib import md5
 
-from test.sql_opt import *
-from test.cfg_hash import CFGHash
+from test import CFGHash
 
 f = open('results.txt' ,'w')
 

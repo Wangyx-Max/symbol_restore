@@ -240,17 +240,15 @@ def compare_callee(src_addr, bin_addr, cur):
     score = 0.0
     sql_src = """select callee_address from diff.callers where caller_address = %s"""
     sql_bin = """select callee_address from callers where caller_address = %s"""
-    sql_res_src = """select bin_address from results where src_address = %s
-               union select bin_address from results_multi where src_address = %s"""
-    sql_res_bin = """select src_address from results where bin_address = %s
-               union select bin_address from results_multi where src_address = %s"""
+    sql_res_src = """select bin_address from results where src_address = %s"""
+    sql_res_bin = """select src_address from results where bin_address = %s"""
     cur.execute(sql_src % src_addr)
     src_callees = cur.fetchall()
     cur.execute(sql_bin % bin_addr)
     bin_callees = cur.fetchall()
     # print src_callees, bin_callees
     for src_callee in src_callees:
-        cur.execute(sql_res_src % (str(src_callee[0]), str(src_callee[0])))
+        cur.execute(sql_res_src % (str(src_callee[0]), ))
         # print sql_res_src % str(src_callee[0])
         row = cur.fetchone()
         if row is not None and str(row[0]) in bin_callees:
@@ -258,7 +256,7 @@ def compare_callee(src_addr, bin_addr, cur):
         else:
             score -= 3
     for bin_callee in bin_callees:
-        cur.execute(sql_res_bin % (str(bin_callee[0]), str(bin_callee[0])))
+        cur.execute(sql_res_bin % (str(bin_callee[0]), ))
         # print sql_res_bin % str(bin_callee[0])
         row = cur.fetchone()
         if row is not None and str(row[0]) in src_callees:

@@ -4,7 +4,7 @@ from idautils import *
 
 import json
 
-from test.sql_opt import SqlOperate
+from test import SqlOperate
 
 
 class StrMatch(object):

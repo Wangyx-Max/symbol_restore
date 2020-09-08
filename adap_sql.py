@@ -499,25 +499,75 @@ sql_dict = {
 sql_collecs.append(sql_dict)
 
 sql_dict = {
-    "type": "Score Match",
-    "description": "Mnemonics Score Match",
+    "type": "Bytes Hash Match",
+    "description": "Same Mnemonics Match",
     "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
-        df.address src_address, 'Mnemonics Score Match' description,
-        f.clean_assembly asm1, df.clean_assembly asm2, f.clean_pseudo pseudo1, df.clean_pseudo pseudo2,
-        f.pseudocode_primes ast1, df.pseudocode_primes ast2,
-        f.md_index mdx1, df.md_index mdx2, f.constants consts1, df.constants consts2, f.numbers nums1, df.numbers nums2,
-        f.numbers2 lnums1, df.numbers2 lnums2
+        df.address src_address, 'Same Mnemonics Match' description
                     from (select * from functions 
                         where address not in (select bin_address from results
-                                        union select bin_address from results_multi
-                                        union select bin_address from results_fuzzy)) f,
+                                        union select bin_address from results_multi)) f,
                     (select * from diff.functions
                     where address not in (select src_address from results
-                                    union select src_address from results_multi
-                                        union select src_address from results_fuzzy)) df
+                                    union select src_address from results_multi)) df
                     where f.mnemonics = df.mnemonics
                     and f.numbers = df.numbers
                     and f.numbers2 = df.numbers2
+    """
+}
+sql_collecs.append(sql_dict)
+
+sql_dict = {
+    "type": "Bytes Hash Match",
+    "description": "Equal Assembly or Pseudo-code Match",
+    "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Equal Assembly or Pseudo-code Match' description
+                    from (select * from functions 
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi)) f,
+                    (select * from diff.functions
+                    where address not in (select src_address from results
+                                    union select src_address from results_multi)) df
+                    where f.assembly = df.assembly
+                    and f.instructions > 2
+                union
+                select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Equal Assembly or Pseudo-code Match' description
+                    from (select * from functions 
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi)) f,
+                    (select * from diff.functions
+                    where address not in (select src_address from results
+                                    union select src_address from results_multi)) df
+                    where f.pseudocode = df.pseudocode
+                    and f.instructions > 2
+    """
+}
+sql_collecs.append(sql_dict)
+
+sql_dict = {
+    "type": "Bytes Hash Match",
+    "description": "Same Cleaned Assembly or Pseudo-code Match",
+    "sql": """select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Same Cleaned Assembly or Pseudo-code Match' description
+                    from (select * from functions
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi)) f,
+                    (select * from diff.functions
+                    where address not in (select src_address from results
+                                    union select src_address from results_multi)) df
+                    where f.clean_assembly = df.clean_assembly
+                    and f.instructions > 2
+                union
+                select distinct f.address ea, f.name bin_name, df.id src_func_id, df.name src_name, 
+        df.address src_address, 'Same Cleaned Assembly or Pseudo-code Match' description
+                    from (select * from functions
+                        where address not in (select bin_address from results
+                                        union select bin_address from results_multi)) f,
+                    (select * from diff.functions
+                    where address not in (select src_address from results
+                                    union select src_address from results_multi)) df
+                    where f.clean_pseudo = df.clean_pseudo
+                    and f.instructions > 2
     """
 }
 sql_collecs.append(sql_dict)
@@ -542,6 +592,7 @@ sql_dict = {
                     where f.constants = df.constants
                     and f.numbers = df.numbers
                     and f.numbers2 = df.numbers2
+                    and f.numbers > 2
     """
 }
 sql_collecs.append(sql_dict)
@@ -564,7 +615,7 @@ sql_dict = {
                                         union select src_address from results_multi
                                         union select src_address from results_fuzzy)) df
                     where f.md_index = df.md_index
-                    and f.md_index != 0
+                    and f.nodes > 1
     """
 }
 sql_collecs.append(sql_dict)
@@ -587,7 +638,7 @@ sql_dict = {
                                         union select src_address from results_multi
                                         union select src_address from results_fuzzy)) df
                     where f.kgh_hash = df.kgh_hash
-                    and f.kgh_hash != 0
+                    and f.nodes > 1 or f.instructions > 5
     """
 }
 sql_collecs.append(sql_dict)
@@ -610,6 +661,7 @@ sql_dict = {
                                         union select src_address from results_multi
                                         union select src_address from results_fuzzy)) df
                     where f.mnemonics_spp = df.mnemonics_spp
+                    and f.instructions > 5
     """
 }
 sql_collecs.append(sql_dict)
@@ -632,6 +684,7 @@ sql_dict = {
                                         union select src_address from results_multi
                                         union select src_address from results_fuzzy)) df
                     where f.pseudocode_hash1 = df.pseudocode_hash1
+                    and f.instructions > 5
     """
 }
 sql_collecs.append(sql_dict)
@@ -654,6 +707,7 @@ sql_dict = {
                                         union select src_address from results_multi
                                         union select src_address from results_fuzzy)) df
                     where f.pseudocode_primes = df.pseudocode_primes
+                    and f.instructions > 5
     """
 }
 sql_collecs.append(sql_dict)
@@ -676,6 +730,7 @@ sql_dict = {
                                         union select src_address from results_multi
                                         union select src_address from results_fuzzy)) df
                     where f.pseudocode_hash2 = df.pseudocode_hash2
+                    and f.instructions > 5
     """
 }
 sql_collecs.append(sql_dict)
@@ -698,6 +753,7 @@ sql_dict = {
                                         union select src_address from results_multi
                                         union select src_address from results_fuzzy)) df
                     where f.pseudocode_hash3 = df.pseudocode_hash3
+                    and f.instructions > 5
     """
 }
 sql_collecs.append(sql_dict)
@@ -990,7 +1046,6 @@ class SqlOperate:
             res = []
         finally:
             self.cur.close()
-            
         return res
 
     def read_results_multi(self, t=''):
@@ -1009,7 +1064,6 @@ class SqlOperate:
             res = []
         finally:
             self.cur.close()
-            
         return res
 
     def read_results_fuzzy(self, des=None):

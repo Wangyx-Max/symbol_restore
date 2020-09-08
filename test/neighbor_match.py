@@ -1,4 +1,4 @@
-from test.sql_opt import SqlOperate
+from test import SqlOperate
 import time
 
 

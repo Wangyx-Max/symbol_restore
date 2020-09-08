@@ -11,10 +11,10 @@ class Options:
         sqlite_db = os.path.splitext(GetIdbPath())[0] + ".sqlite"
         self.file_out = kwargs.get('file_out', sqlite_db)
         self.file_in = kwargs.get('file_in', '')
-        self.perfect = kwargs.get('perfect_match', True)
-        self.slow = kwargs.get('slow_match', False)
-        self.multi = kwargs.get('multi_match', False)
-        self.fuzzy = kwargs.get('fuzzy_match', False)
+        self.perfect_match = kwargs.get('perfect_match', True)
+        self.slow_match = kwargs.get('slow_match', False)
+        self.multi_match = kwargs.get('multi_match', False)
+        self.fuzzy_match = kwargs.get('fuzzy_match', False)
         self.show = kwargs.get('show', True)
         self.only_show = kwargs.get('only_show', False)
 
@@ -43,29 +43,29 @@ SQLite databases:
                 'iFileOpen': F.FileInput(open=True),
                 'iFileSave': F.FileInput(save=True),
                 'cGroup1': F.ChkGroupControl(("rPerfectMatch", "rSlowMatch", "rMultiMatch", "rFuzzyMatch")),
-                'cGroup2': F.RadGroupControl(("rShowResults", "rSaveResults"))
+                'cGroup2': F.RadGroupControl(("rShowResults", "rOnlyShowResults", "rSaveResults"))
             })
 
     def set_options(self, opts):
         self.iFileSave.value = opts.file_out
         self.iFileOpen.value = opts.file_in
-        self.rPerfectMatch.checked = opts.perfect
-        self.rSlowMatch.checked = opts.slow
-        self.rMultiMatch.checked = opts.multi
-        self.rFuzzyMatch.checked = opts.fuzzy
+        self.rPerfectMatch.checked = opts.perfect_match
+        self.rSlowMatch.checked = opts.slow_match
+        self.rMultiMatch.checked = opts.multi_match
+        self.rFuzzyMatch.checked = opts.fuzzy_match
+        self.rOnlyShowResults.selected = opts.only_show
         self.rShowResults.selected = opts.show
-        self.rOnlyShowResults.selected = opts.show
 
     def get_options(self):
         opts = dict(
             file_out=self.iFileSave.value,
             file_in=self.iFileOpen.value,
-            perfect=self.rPerfectMatch.checked,
-            slow=self.rSlowMatch.checked,
-            multi=self.rMultiMatch.checked,
-            fuzzy=self.rFuzzyMatch.checked,
-            show=self.rShowResults.selected,
-            only_show=self.rOntlyShowResults.selected
+            perfect_match=self.rPerfectMatch.checked,
+            slow_match=self.rSlowMatch.checked,
+            multi_match=self.rMultiMatch.checked,
+            fuzzy_match=self.rFuzzyMatch.checked,
+            only_show=self.rOnlyShowResults.selected,
+            show=self.rShowResults.selected
         )
         return Options(**opts)
 
@@ -78,51 +78,49 @@ def diff_or_match(**options):
     x = ExporterSetup()
     x.Compile()
     x.set_options(opts)
-    res = False
+
     if not x.Execute():
-        return res
+        return
 
     opts = x.get_options()
+    # print opts.file_in
     show_wait_box("Start Running ... ")
     if opts.file_out == opts.file_in:
-        return res
+        return
     elif opts.file_in == "":
         af = AnalyseFunction(opts.file_out)
-        if opts.slow is True:
+        if opts.slow_match is True:
             af.analyse_symbol_slow()
         else:
             af.analyse_symbol()
-        res = True
     elif opts.only_show is True:
         show_all_results(opts.file_out, opts.file_in)
-        if opts.multi is True:
+        if opts.multi_match is True:
             show_all_results(opts.file_out, opts.file_in, 'Multiple Match')
-        if opts.fuzzy is True:
+        if opts.fuzzy_match is True:
             show_all_results(opts.file_out, opts.file_in, 'Fuzzy Match')
     else:
         pm = PerfectMatch(opts.file_out, opts.file_in)
-        if opts.perfect is True:
+        if opts.perfect_match is True:
             pm.do_perfect_match()
-            if opts.slow is True:
+            if opts.slow_match is True:
                 pm.do_slow_match()
         else:
             pm.do_perfect_match('init')
-            if opts.slow is True:
+            if opts.slow_match is True:
                 pm.do_slow_match('init')
-        if opts.multi is True:
+        if opts.multi_match is True:
             mm = MultipleMatch(opts.file_out, opts.file_in)
             mm.do_multiple_match()
-        if opts.fuzzy is True and opts.slow is True:
+        if opts.fuzzy_match is True and opts.slow_match is True:
             fm = FuzzyMatch(opts.file_out, opts.file_in)
             fm.do_fuzzy_match()
         if opts.show is True:
             show_all_results(opts.file_out, opts.file_in)
-            if opts.multi is True:
+            if opts.multi_match is True:
                 show_all_results(opts.file_out, opts.file_in, 'Multiple Match')
-            if opts.fuzzy is True:
+            if opts.fuzzy_match is True:
                 show_all_results(opts.file_out, opts.file_in, 'Fuzzy Match')
-        res = True
-    return res
 
 
 def main():
