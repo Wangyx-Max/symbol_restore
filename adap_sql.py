@@ -252,8 +252,8 @@ sql_dict = {
     "description": "Assembly Neighbor Match",
     "sql": """select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
                     'Assembly Neighbor Match' description, f.id bin_id
-                    from (select * from functions where assembly) f,
-                        (select * from diff.functions where assembly) df
+                    from (select * from functions where assembly!=0) f,
+                        (select * from diff.functions where assembly!=0) df
                     where f.assembly = df.assembly
                     and f.address not in (select bin_address from results)
     """
@@ -265,8 +265,8 @@ sql_dict = {
     "description": "Clean Assembly Neighbor Match",
     "sql": """select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
                     'Clean Assembly Neighbor Match' description, f.id bin_id
-                    from (select * from functions where clean_assembly) f,
-                        (select * from diff.functions where clean_assembly) df
+                    from (select * from functions where clean_assembly!=0) f,
+                        (select * from diff.functions where clean_assembly!=0) df
                     where f.clean_assembly = df.clean_assembly
                     and f.address not in (select bin_address from results)
     """
@@ -278,8 +278,8 @@ sql_dict = {
     "description": "Pseudocode Neighbor Match",
     "sql": """select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
                     'Assembly Neighbor Match' description, f.id bin_id
-                    from (select * from functions where pseudocode) f,
-                        (select * from diff.functions where pseudocode) df
+                    from (select * from functions where pseudocode!=0) f,
+                        (select * from diff.functions where pseudocode!=0) df
                     where f.pseudocode = df.pseudocode
                     and f.pseudocode_lines > 1
                     and f.address not in (select bin_address from results)
@@ -292,8 +292,8 @@ sql_dict = {
     "description": "Clean Pseudocode Neighbor Match",
     "sql": """select distinct f.address bin_addr, f.name bin_name, df.id src_func_id, df.name src_name, df.address src_addr,
                     'Clean Assembly Neighbor Match' description, f.id bin_id
-                    from (select * from functions where clean_pseudo) f,
-                        (select * from diff.functions where clean_pseudo) df
+                    from (select * from functions where clean_pseudo!=0) f,
+                        (select * from diff.functions where clean_pseudo!=0) df
                     where f.clean_pseudo = df.clean_pseudo
                     and f.pseudocode_lines > 1
                     and f.address not in (select bin_address from results)
